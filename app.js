@@ -83,17 +83,11 @@ class VirtualCup {
         const height = window.innerHeight;
 
         // --- Layout Adjustment ---
-        // Toolbar is at bottom approx 150px height (2 rows) + padding.
-        // We need to shift Cup UP.
-
-        const cupWidth = Math.min(width * 0.55, 300); // Slightly wider relative
-        const cupHeight = Math.min(height * 0.4, 350); // Dynamic height (max 40% screen)
+        const cupWidth = Math.min(width * 0.55, 300);
+        const cupHeight = Math.min(height * 0.4, 350);
         const wallThickness = 10;
 
         const cupX = width / 2;
-        // Shift Up: Center - 15% of Height. 
-        // Before was Center + 50px (Too low).
-        // New: Center - 50px? 
         const cupY = (height / 2) - 50;
 
         this.cupDimensions = { x: cupX, y: cupY, width: cupWidth, height: cupHeight };
@@ -141,19 +135,20 @@ class VirtualCup {
         window.addEventListener('resize', () => {
             this.render.canvas.width = window.innerWidth;
             this.render.canvas.height = window.innerHeight;
-            // Ideally, we should recreate cup on resize, but that resets sim.
-            // Just leaving as is for now.
         });
 
         // --- Loop Logic ---
         Events.on(this.runner, 'afterTick', () => {
+            // 1. Cleanup
             const allBodies = Composite.allBodies(this.world);
-            const removeThreshold = window.innerHeight + 100;
-            const boundsPadding = 500;
+            // Tighten padding : 100px is enough to be "off screen"
+            const boundsPadding = 100;
             const bTop = -boundsPadding;
             const bBottom = window.innerHeight + boundsPadding;
             const bLeft = -boundsPadding;
             const bRight = window.innerWidth + boundsPadding;
+
+            const bodiesToRemove = [];
 
             for (let i = 0; i < allBodies.length; i++) {
                 const body = allBodies[i];
@@ -161,17 +156,31 @@ class VirtualCup {
 
                 if (body.position.y > bBottom || body.position.y < bTop ||
                     body.position.x > bRight || body.position.x < bLeft) {
-                    Composite.remove(this.world, body);
+                    bodiesToRemove.push(body);
                 }
             }
 
+            if (bodiesToRemove.length > 0) {
+                Composite.remove(this.world, bodiesToRemove);
+            }
+
+            // 2. Debug Info Update
             if (!this.debugInfo) return;
             const fps = this.runner.fps || 60;
-            const remainingBodies = Composite.allBodies(this.world).length;
+
+            // Re-fetch accurate count strictly for dynamic bodies
+            const currentBodies = Composite.allBodies(this.world);
+            let dynamicCount = 0;
+            for (let b of currentBodies) {
+                if (!b.isStatic && b.label !== 'cup') {
+                    dynamicCount++;
+                }
+            }
+
             const gx = this.engine.gravity.x.toFixed(2);
             const gy = this.engine.gravity.y.toFixed(2);
             this.debugInfo.innerHTML = `
-                Objects: ${remainingBodies}<br>
+                Objects: ${dynamicCount}<br>
                 FPS: ${Math.round(fps)}<br>
                 Tilt: X ${gx}, Y ${gy}
             `;
@@ -182,7 +191,6 @@ class VirtualCup {
         window.addEventListener('devicemotion', (event) => {
             const acc = event.accelerationIncludingGravity;
             if (!acc) return;
-            // ... (Same sensor logic) ...
             const rawX = -(acc.x || 0) / 9.8;
             const rawY = (acc.y || 0) / 9.8;
             let orientation = 0;
@@ -194,15 +202,13 @@ class VirtualCup {
             const rad = orientation * (Math.PI / 180);
             const finalX = rawX * Math.cos(rad) + rawY * Math.sin(rad);
             const finalY = -rawX * Math.sin(rad) + rawY * Math.cos(rad);
-
             this.engine.gravity.x = finalX;
             this.engine.gravity.y = finalY;
 
             if (this.cup) {
                 Body.setAngle(this.cup, 0);
-                // Keep cup fixed in center
                 Body.setPosition(this.cup, {
-                    x: this.cupDimensions.x, // Use stored dimension
+                    x: this.cupDimensions.x,
                     y: this.cupDimensions.y
                 });
                 Body.setVelocity(this.cup, { x: 0, y: 0 });
@@ -271,8 +277,8 @@ class VirtualCup {
 
     addItems(type, count = 20) {
         if (type === 'bomb') count = 1;
+
         const spawnX = window.innerWidth / 2;
-        // Spawn slightly above cup
         const spawnY = this.cupDimensions.y - this.cupDimensions.height / 2 - 50;
         const spread = this.cupDimensions.width / 2;
         const newBodies = [];

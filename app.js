@@ -12,9 +12,13 @@ const Engine = Matter.Engine,
 
 class VirtualCup {
     constructor() {
+        // High Position Iterations for Incompressibility
+        // The higher this value, the stiffer the object interactions (less stack compression).
+        // Standard is 6, we use 50 for water-like rigidness.
         this.engine = Engine.create({
-            positionIterations: 20,
-            velocityIterations: 20
+            positionIterations: 50,
+            velocityIterations: 20,
+            constraintIterations: 10
         });
 
         // Default Gravity
@@ -32,7 +36,7 @@ class VirtualCup {
         // Elements
         this.startBtn = document.getElementById('startBtn');
         this.simUi = document.getElementById('simUi');
-        this.debugInfo = document.getElementById('debugInfo'); // Debug Panel
+        this.debugInfo = document.getElementById('debugInfo');
 
         this.startBtn.addEventListener('click', () => this.start());
 
@@ -64,7 +68,7 @@ class VirtualCup {
     initPhysics() {
         document.body.classList.add('running');
         this.simUi.style.display = 'block';
-        if (this.debugInfo) this.debugInfo.style.display = 'block'; // Show Debug
+        if (this.debugInfo) this.debugInfo.style.display = 'block';
 
         this.render = Render.create({
             element: document.body,
@@ -73,7 +77,8 @@ class VirtualCup {
                 width: window.innerWidth,
                 height: window.innerHeight,
                 wireframes: false,
-                background: 'transparent'
+                background: 'transparent',
+                pixelRatio: window.devicePixelRatio // Sharper rendering
             }
         });
 
@@ -133,22 +138,13 @@ class VirtualCup {
         });
 
         // --- Debug Loop ---
-        // Update debug text every 500ms to avoid DOM thrashing or every tick?
-        // Every tick is fine for simple text.
         Events.on(this.runner, 'afterTick', () => {
             if (!this.debugInfo) return;
-
-            // FPS
             const fps = this.runner.fps || 60;
-            // Objects: Total bodies - Cup(1) - MouseConstraint(1) - Invisible walls(0)?
-            // Recursive count
             const allBodies = Composite.allBodies(this.world);
             const bodyCount = allBodies.length;
-
-            // Gravity Tilt
             const gx = this.engine.gravity.x.toFixed(2);
             const gy = this.engine.gravity.y.toFixed(2);
-
             this.debugInfo.innerHTML = `
                 Objects: ${bodyCount}<br>
                 FPS: ${Math.round(fps)}<br>
@@ -224,10 +220,20 @@ class VirtualCup {
             const y = spawnY - Math.random() * 100;
             let body;
 
-            const commonOps = { restitution: 0.2, friction: 0.1 };
             if (type === 'water') {
-                body = Bodies.circle(x, y, Common.random(4, 7), {
-                    friction: 0.001, restitution: 0.1, frictionAir: 0.01, render: { fillStyle: '#3498db' }
+                // Incompressible Fluid Settings
+                // Small, heavy, low friction, low bounce, high slop resistance
+                body = Bodies.circle(x, y, 6, { // Slightly larger uniform size
+                    friction: 0.0,
+                    frictionStatic: 0.0,
+                    frictionAir: 0.0, // Low air resistance
+                    restitution: 0.0, // No bounce (inelastic)
+                    density: 1.0, // Heavy (water is heavy!)
+                    slop: 0.0, // No penetration allowed
+                    render: {
+                        fillStyle: '#3498db',
+                        opacity: 0.8
+                    }
                 });
             } else if (type === 'wood') {
                 body = Bodies.rectangle(x, y, Common.random(15, 25), Common.random(15, 25), {
@@ -239,7 +245,7 @@ class VirtualCup {
                 });
             } else if (type === 'ice') {
                 body = Bodies.rectangle(x, y, Common.random(12, 18), Common.random(12, 18), {
-                    friction: 0.0, render: { fillStyle: '#a29bfe', opacity: 0.6 }
+                    friction: 0.1, restitution: 0.1, render: { fillStyle: '#a29bfe', opacity: 0.6 }
                 });
             } else if (type === 'popcorn') {
                 body = Bodies.polygon(x, y, Math.floor(Math.random() * 4) + 3, Common.random(8, 12), {

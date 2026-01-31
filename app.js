@@ -99,7 +99,8 @@ class VirtualCup {
                 lineWidth: 1
             },
             friction: 0.05,
-            restitution: 0.2
+            restitution: 0.2,
+            isStatic: true // Parts are static relative to body
         };
 
         const bottom = Bodies.rectangle(cupX, cupY + cupHeight / 2, cupWidth + wallThickness, wallThickness, partOptions);
@@ -109,7 +110,8 @@ class VirtualCup {
         this.cup = Body.create({
             parts: [bottom, leftWall, rightWall],
             isStatic: true,
-            friction: 0.1
+            friction: 0.1,
+            label: 'cup' // Tag cup to avoid deleting it
         });
 
         Composite.add(this.world, this.cup);
@@ -134,16 +136,45 @@ class VirtualCup {
             this.render.canvas.height = window.innerHeight;
         });
 
-        // --- Debug Loop ---
+        // --- Loop Logic (Debug & Cleanup) ---
         Events.on(this.runner, 'afterTick', () => {
+            // 1. Cleanup: Remove bodies that fell off screen
+            const allBodies = Composite.allBodies(this.world);
+            const removeThreshold = window.innerHeight + 100; // 100px below screen
+
+            // Also check Top/Left/Right bounds if gravity is varied?
+            // Actually, if gravity is UP (phone upscale down), items fly UP.
+            // So we should check all bounds roughly.
+            // Let's use a safe bounding box larger than screen.
+            const boundsPadding = 500;
+            const bTop = -boundsPadding;
+            const bBottom = window.innerHeight + boundsPadding;
+            const bLeft = -boundsPadding;
+            const bRight = window.innerWidth + boundsPadding;
+
+            for (let i = 0; i < allBodies.length; i++) {
+                const body = allBodies[i];
+                // Don't delete static cup parts or constraints
+                if (body.isStatic || body.label === 'cup') continue;
+
+                if (body.position.y > bBottom || body.position.y < bTop ||
+                    body.position.x > bRight || body.position.x < bLeft) {
+                    Composite.remove(this.world, body);
+                }
+            }
+
+            // 2. Debug Info
             if (!this.debugInfo) return;
             const fps = this.runner.fps || 60;
-            const allBodies = Composite.allBodies(this.world);
-            const bodyCount = allBodies.length;
+            // Recount after cleanup
+            const remainingBodies = Composite.allBodies(this.world).length;
+            // Subtract Cup(1), MouseConstraint is constraint not body? Body.
+            // Actually Composite.allBodies returns bodies. MouseConstraint is a Constraint.
+            // So count is accurate.
             const gx = this.engine.gravity.x.toFixed(2);
             const gy = this.engine.gravity.y.toFixed(2);
             this.debugInfo.innerHTML = `
-                Objects: ${bodyCount}<br>
+                Objects: ${remainingBodies}<br>
                 FPS: ${Math.round(fps)}<br>
                 Tilt: X ${gx}, Y ${gy}
             `;
@@ -174,7 +205,16 @@ class VirtualCup {
             this.engine.gravity.y = finalY;
 
             if (this.cup) {
+                // Ensure cup is static. 
+                // But Body.create isStatic:true handles it physically.
+                // We just reset angle to be safe.
                 Body.setAngle(this.cup, 0);
+                Body.setPosition(this.cup, {
+                    x: this.cupDimensions.x,
+                    y: this.cupDimensions.y
+                });
+                // Also reset velocity just in case
+                Body.setVelocity(this.cup, { x: 0, y: 0 });
             }
         });
 
@@ -238,7 +278,6 @@ class VirtualCup {
         Composite.remove(this.world, bombBody);
     }
 
-    // --- Dynamic Item Spawner ---
     addItems(type, count = 20) {
         if (type === 'bomb') count = 1;
 
@@ -246,8 +285,6 @@ class VirtualCup {
         const spawnY = this.cupDimensions.y - this.cupDimensions.height - 50;
         const spread = this.cupDimensions.width / 2;
         const newBodies = [];
-
-        // Colors for Confetti
         const confettiColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c'];
 
         for (let i = 0; i < count; i++) {
@@ -289,13 +326,10 @@ class VirtualCup {
                     density: 0.1, restitution: 0.0, friction: 0.05, render: { fillStyle: '#f1c40f' }
                 });
             } else if (type === 'paper') {
-                // Color Paper Logic
-                // Random color from list
                 const color = Common.choose(confettiColors);
-
                 body = Bodies.rectangle(x, y, 20, 25, {
                     density: 0.0001, frictionAir: 0.1, restitution: 0.0,
-                    render: { fillStyle: color } // Apply random color
+                    render: { fillStyle: color }
                 });
             } else if (type === 'bomb') {
                 body = Bodies.circle(x, y, 15, {

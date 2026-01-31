@@ -13,8 +13,8 @@ const Engine = Matter.Engine,
 class VirtualCup {
     constructor() {
         this.engine = Engine.create({
-            positionIterations: 10,
-            velocityIterations: 10
+            positionIterations: 20, // Max stability for thin walls
+            velocityIterations: 20
         });
         this.world = this.engine.world;
         this.render = null;
@@ -70,10 +70,10 @@ class VirtualCup {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
-        // --- Create Cup (As a Single Composite Body) ---
+        // --- Create Cup (Thin Glass Style) ---
         const cupWidth = Math.min(width * 0.5, 300);
         const cupHeight = 350;
-        const wallThickness = 40; // Thick enough
+        const wallThickness = 10; // Thin walls requested
         const cupX = width / 2;
         const cupY = height / 2 + 50;
 
@@ -83,7 +83,17 @@ class VirtualCup {
         // But Body.create with parts calculates center automatically.
         // It's safer to create parts first.
 
-        const partOptions = { render: { fillStyle: '#ffffff', opacity: 0.9 }, friction: 0.1 };
+        // Glass Style
+        const partOptions = {
+            render: {
+                fillStyle: '#d2dae2', // Light grey/blue glass
+                opacity: 0.6,
+                strokeStyle: '#bdc3c7',
+                lineWidth: 1
+            },
+            friction: 0.05, // Slippery glass
+            restitution: 0.2 // A bit rigid
+        };
 
         const bottom = Bodies.rectangle(cupX, cupY + cupHeight / 2, cupWidth + wallThickness, wallThickness, partOptions);
         const leftWall = Bodies.rectangle(cupX - cupWidth / 2, cupY, wallThickness, cupHeight, partOptions);
@@ -94,7 +104,7 @@ class VirtualCup {
             parts: [bottom, leftWall, rightWall],
             isStatic: true, // It stays in place but can rotate? 
             // Static bodies in Matter.js can be roatated manually
-            friction: 0.2
+            friction: 0.1
         });
 
         Composite.add(this.world, this.cup);

@@ -59,45 +59,63 @@ class VirtualCup {
             }
         });
 
-        // 2. Create Bounds (Cup Walls)
         const width = window.innerWidth;
         const height = window.innerHeight;
-        const wallOptions = {
+
+        // 2. Create Cup (U-shape)
+        // Center of screen
+        const cupWidth = Math.min(width * 0.5, 250); // Relative width, max 250px
+        const cupHeight = 350;
+        const wallThickness = 15;
+        const cupX = width / 2;
+        const cupY = height / 2 + 50; // Slightly lower than center
+
+        const cupOptions = {
             isStatic: true,
-            render: { fillStyle: '#ffffff', opacity: 0.8 },
-            friction: 0.5
+            render: { fillStyle: '#ffffff', opacity: 0.9 },
+            friction: 0.1
         };
 
-        // Screen is the cup? Or specific cup shape? 
-        // Let's make the SCREEN boundaries the cup for simplicity first, 
-        // but open top so water can fly out if shaken hard.
-
-        // Floor
-        const floor = Bodies.rectangle(width / 2, height + 50, width, 100, wallOptions);
+        // Cup Parts calculated relative to center
+        // Bottom
+        const bottom = Bodies.rectangle(cupX, cupY + cupHeight / 2, cupWidth, wallThickness, cupOptions);
         // Left Wall
-        const leftWall = Bodies.rectangle(-50, height / 2, 100, height * 2, wallOptions);
+        const leftWall = Bodies.rectangle(cupX - cupWidth / 2 + wallThickness / 2, cupY, wallThickness, cupHeight, cupOptions);
         // Right Wall
-        const rightWall = Bodies.rectangle(width + 50, height / 2, 100, height * 2, wallOptions);
+        const rightWall = Bodies.rectangle(cupX + cupWidth / 2 - wallThickness / 2, cupY, wallThickness, cupHeight, cupOptions);
 
-        Composite.add(this.world, [floor, leftWall, rightWall]);
+        Composite.add(this.world, [bottom, leftWall, rightWall]);
 
-        // 3. Add 'Water' Particles
-        // Create 300 little blue circles
+        // 3. Add 'Water' Particles INSIDE the cup
         const particleOptions = {
-            friction: 0.05,
-            restitution: 0.5, // Bounciness
+            friction: 0.001, // Very slippery like water
+            restitution: 0.1, // Not bouncy
+            frictionAir: 0.02, // Some air resistance
+            density: 1.0,  // Standard density
             render: { fillStyle: '#3498db' }
         };
 
         const particles = [];
-        for (let i = 0; i < 400; i++) {
-            const x = Common.random(50, width - 50);
-            const y = Common.random(0, height / 2);
-            particles.push(Bodies.circle(x, y, Common.random(5, 10), particleOptions));
+        const particleRadius = 5;
+        const particleCount = 200; // Enough to fill half cup
+
+        // Fill grid inside cup
+        const startX = cupX - cupWidth / 2 + wallThickness * 2;
+        // Start filling from bottom up
+        let currentX = startX;
+        let currentY = cupY + cupHeight / 2 - wallThickness - 20;
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(Bodies.circle(currentX + (Math.random() * 4 - 2), currentY, particleRadius, particleOptions));
+
+            currentX += particleRadius * 2.2;
+            // Next row if full
+            if (currentX > cupX + cupWidth / 2 - wallThickness * 2) {
+                currentX = startX;
+                currentY -= particleRadius * 2.2;
+            }
         }
 
-        // Add Stack instead for cleaner drop?
-        // Let's just drop them randomly
         Composite.add(this.world, particles);
 
         // 4. Run
@@ -109,36 +127,32 @@ class VirtualCup {
         window.addEventListener('resize', () => {
             this.render.canvas.width = window.innerWidth;
             this.render.canvas.height = window.innerHeight;
+            // Note: Body positions are static, so they won't re-center automatically on resize.
+            // Reload page recommended for big resize.
         });
     }
 
     initSensors() {
         window.addEventListener('deviceorientation', (event) => {
-            // Gamma: Left/Right tilt (-90 to 90) -> Controls Gravity X
-            // Beta: Front/Back tilt (-180 to 180) -> Controls Gravity Y
-
-            // Adjust gravity based on tilt
-            // Default gravity is y: 1
+            // Gamma: Left/Right tilt (-90 to 90) -> Gravity X
+            // Beta: Front/Back tilt (-180 to 180) -> Gravity Y
 
             const gravity = this.engine.world.gravity;
 
             if (event.gamma !== null) {
-                // Determine gravity vector
-                // Simple version:
-                // Tilt Right (Gamma > 0) -> Gravity X positive
-                // Tilt Left (Gamma < 0) -> Gravity X negative
-                // Upside down (Beta < -90 or > 90) -> Gravity Y negative
+                // Adjust sensitivity
+                // When phone is upright (Beta ~90), Gravity Y = 1
+                // When phone tilted left (Gamma < 0), Gravity X < 0
 
-                const x = Common.clamp(event.gamma / 45, -1, 1);
-                const y = Common.clamp(event.beta / 45, -1, 1);
+                // Clamp values to realistic gravity scale
+                const x = Common.clamp(event.gamma / 45, -1.5, 1.5);
+                const y = Common.clamp(event.beta / 45, -1.5, 1.5);
 
+                // Smooth update if needed, but direct is more responsive
                 gravity.x = x;
                 gravity.y = y;
             }
         });
-
-        // Fallback for Desktop testing (Mouse interaction)
-        // Add MouseConstraint if needed, but Gravity is key here.
     }
 }
 

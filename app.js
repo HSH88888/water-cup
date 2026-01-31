@@ -27,7 +27,6 @@ class VirtualCup {
         this.cup = null;
 
         // Detect Mobile (Touch Device)
-        // If it supports touch, we assume it's mobile and DISABLE mouse rotation.
         this.isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
         // Elements
@@ -44,6 +43,7 @@ class VirtualCup {
     }
 
     start() {
+        // Request Motion Permission (iOS 13+ support)
         if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
             DeviceMotionEvent.requestPermission()
                 .then(response => {
@@ -135,28 +135,62 @@ class VirtualCup {
     }
 
     initSensors() {
-        // 1. Mobile Gravity (Fixed Cup)
-        window.addEventListener('deviceorientation', (event) => {
-            if (event.gamma === null) return;
+        // 1. Mobile Gravity (Acceleration Sensor)
+        // Replaced deviceorientation with devicemotion for 360-degree support
+        window.addEventListener('devicemotion', (event) => {
+            // Acceleration including gravity (x, y, z)
+            const acc = event.accelerationIncludingGravity;
+            if (!acc) return;
 
-            // Tilt -> Gravity Vector
-            const theta = event.gamma * (Math.PI / 180);
+            // Raw sensor values (Platform dependent, but usually m/s^2)
+            // Android: x is Right(+), y is Up(+) (Standard)
+            // iOS: x is Right(+), y is Up(+) (Standard)
+            // But gravity pulls DOWN.
+            // If phone is upright: y = +9.8 (Gravity felt pushing UP by ground? No, sensor returns Frame acceleration)
 
-            let safeTheta = theta;
-            if (safeTheta > Math.PI / 2) safeTheta = Math.PI / 2;
-            if (safeTheta < -Math.PI / 2) safeTheta = -Math.PI / 2;
+            // Standard behavior:
+            // Holding phone upright: x=0, y=9.8
+            // Tilted right 90deg: x=-9.8, y=0
 
-            this.engine.gravity.x = Math.sin(safeTheta);
-            this.engine.gravity.y = Math.cos(safeTheta);
+            // Matter.js Gravity: x=0, y=1 is Down on screen.
+            // We need to map sensor to screen gravity.
 
-            // FORCE Cup Angle to 0 (Fix rotation)
+            // Let's deduce mapping:
+            // Upright (y=9.8) -> Gravity Y should be 1 (Down).
+            // Upside down (y=-9.8) -> Gravity Y should be -1 (Up).
+            // Tilted Right (x=-9.8) -> Gravity X should be 1 (Right).
+            // Tilted Left (x=9.8) -> Gravity X should be -1 (Left).
+
+            // Wait, standard Android/iOS:
+            // Tilted Right (Landscape Left): x starts changing.
+            // Let's try direct mapping with scaling.
+            // Max Value ~9.8.
+
+            // Orientation correction
+            // Screen Rotation affects coordinate system on some devices.
+            // But usually physics apps lock orientation or handle it.
+            // Let's assume Portrait mode locked or adapt simple mapping first.
+
+            // Experimentally optimal mapping:
+            // Gravity X = -acc.x / 9.8
+            // Gravity Y = acc.y / 9.8
+
+            // Let's apply a smoothing factor or direct? Direct is responsive.
+
+            const gx = -(acc.x || 0) / 9.8;
+            const gy = (acc.y || 0) / 9.8;
+
+            // Apply to engine
+            this.engine.gravity.x = gx;
+            this.engine.gravity.y = gy;
+
+            // Force Cup Fixed
             if (this.cup) {
                 Body.setAngle(this.cup, 0);
             }
         });
 
         // 2. PC Mouse Rotation (Strictly PC Only)
-        // If it's a mobile device (supports touch), WE DO NOT ADD THESE LISTENERS.
         if (!this.isMobile) {
             let isDragging = false;
             let startX = 0;
@@ -179,7 +213,6 @@ class VirtualCup {
 
             document.addEventListener('mouseup', () => {
                 isDragging = false;
-                // Auto reset on PC
                 const resetInterval = setInterval(() => {
                     if (isDragging) { clearInterval(resetInterval); return; }
                     if (Math.abs(this.cup.angle) < 0.05) {

@@ -116,14 +116,6 @@ class VirtualCup {
         Runner.run(this.runner, this.engine);
 
         // --- Interaction ---
-        // MouseConstraint allows dragging objects (water, ice)
-        // Check if we want to disable this on mobile too?
-        // User said "mouse click effect affects strangely".
-        // Usually MouseConstraint is fine, but maybe touch events are double-handled.
-        // Let's keep MouseConstraint but maybe disable it if sensorActive?
-        // Matter.js Mouse handles touch automatically. 
-        // We will leave it for object interaction, but fix the Cup Rotation conflict below.
-
         const mouse = Mouse.create(this.render.canvas);
         const mouseConstraint = MouseConstraint.create(this.engine, {
             mouse: mouse,
@@ -147,7 +139,13 @@ class VirtualCup {
             this.sensorActive = true;
 
             // Gamma is left/right tilt (-90 to 90)
-            const tiltAngle = (event.gamma) * (Math.PI / 180);
+            // User requested explicit 1:1 match.
+            // Convert degrees to radians directly.
+            let tiltAngle = event.gamma * (Math.PI / 180);
+
+            // Clamp to -90 ~ 90 degrees just in case
+            if (tiltAngle > Math.PI / 2) tiltAngle = Math.PI / 2;
+            if (tiltAngle < -Math.PI / 2) tiltAngle = -Math.PI / 2;
 
             if (this.cup) {
                 Body.setAngle(this.cup, tiltAngle);

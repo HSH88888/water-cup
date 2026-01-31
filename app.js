@@ -84,14 +84,22 @@ class VirtualCup {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
-        // --- Layout Adjustment ---
+        // --- Device-Specific Layout Adjustment ---
         const cupWidth = Math.min(width * 0.55, 300);
         const cupHeight = Math.min(height * 0.4, 350);
         const wallThickness = 10;
 
         const cupX = width / 2;
-        // Moved cup down: changed -50 to +80 to reduce distance to toolbar
-        const cupY = (height / 2) + 80;
+        let cupY;
+
+        // Determine cup vertical position based on device type
+        if (this.isMobile) {
+            // Mobile: Moderate distance
+            cupY = (height / 2) + 20;
+        } else {
+            // PC: Higher up to avoid overlap with bottom toolbar
+            cupY = (height / 2) - 100;
+        }
 
         this.cupDimensions = { x: cupX, y: cupY, width: cupWidth, height: cupHeight };
 

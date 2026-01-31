@@ -18,7 +18,6 @@ class VirtualCup {
             constraintIterations: 10
         });
 
-        // [COMMON] Default Gravity (Downwards)
         this.engine.gravity.x = 0;
         this.engine.gravity.y = 1;
 
@@ -30,7 +29,6 @@ class VirtualCup {
         // Detect Mobile
         this.isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
-        // Elements
         this.startBtn = document.getElementById('startBtn');
         this.simUi = document.getElementById('simUi');
         this.debugInfo = document.getElementById('debugInfo');
@@ -86,7 +84,6 @@ class VirtualCup {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
-        // Layout
         const cupWidth = Math.min(width * 0.55, 300);
         const cupHeight = Math.min(height * 0.4, 350);
         const wallThickness = 10;
@@ -127,7 +124,6 @@ class VirtualCup {
         this.runner = Runner.create();
         Runner.run(this.runner, this.engine);
 
-        // Interaction
         const mouse = Mouse.create(this.render.canvas);
         const mouseConstraint = MouseConstraint.create(this.engine, {
             mouse: mouse,
@@ -141,12 +137,9 @@ class VirtualCup {
             this.render.canvas.height = window.innerHeight;
         });
 
-        // Loop Logic
         Events.on(this.runner, 'afterTick', () => {
             const allBodies = Composite.allBodies(this.world);
 
-            // Adjust Bounds for Cleanup
-            // Top bound must be very high to allow spawning from above screen
             const bTop = -1000;
             const bBottom = window.innerHeight + 100;
             const bLeft = -100;
@@ -247,18 +240,20 @@ class VirtualCup {
         if (type === 'bomb') count = 1;
 
         const spawnX = window.innerWidth / 2;
-        // Adjusted spawnY: Use Cup Top Edge (-50px inside cup) instead of way above
-        // CupY is center. Top edge is y - height/2.
-        // We spawn at y - height/2 + 20 (Just inside)
-        const spawnY = this.cupDimensions.y - this.cupDimensions.height / 2 + 50;
+        // Revert spawn height to original as requested
+        const spawnY = this.cupDimensions.y - this.cupDimensions.height / 2 - 100;
 
         const spread = this.cupDimensions.width / 2;
         const newBodies = [];
         const confettiColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c'];
 
         for (let i = 0; i < count; i++) {
-            const x = spawnX + (Math.random() - 0.5) * spread;
-            // Add some randomness to Y but stay visible
+            // FIX: If it is a Bomb, force Center X position. Do not randomize.
+            // This guarantees it falls into the cup and is not lost if randomization pushes it too far.
+            const x = (type === 'bomb')
+                ? spawnX
+                : spawnX + (Math.random() - 0.5) * spread;
+
             const y = spawnY - Math.random() * 50;
             let body;
 

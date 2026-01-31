@@ -64,6 +64,24 @@ class VirtualCup {
         }
     }
 
+    // Dynamic layout calculation
+    updateLayout(width, height) {
+        const cupWidth = Math.min(width * 0.55, 300);
+        const cupHeight = Math.min(height * 0.4, 350);
+        const cupX = width / 2;
+        let cupY;
+
+        if (this.isMobile) {
+            cupY = (height / 2) + 20;
+        } else {
+            // PC: Position based on vertical proportion (42% of screen height)
+            // This scales better with different PC monitor sizes
+            cupY = height * 0.42;
+        }
+
+        this.cupDimensions = { x: cupX, y: cupY, width: cupWidth, height: cupHeight };
+    }
+
     initPhysics() {
         document.body.classList.add('running');
         this.simUi.style.display = 'block';
@@ -84,24 +102,7 @@ class VirtualCup {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
-        // --- Device-Specific Layout Adjustment ---
-        const cupWidth = Math.min(width * 0.55, 300);
-        const cupHeight = Math.min(height * 0.4, 350);
-        const wallThickness = 10;
-
-        const cupX = width / 2;
-        let cupY;
-
-        // Determine cup vertical position based on device type
-        if (this.isMobile) {
-            // Mobile: Moderate distance
-            cupY = (height / 2) + 20;
-        } else {
-            // PC: Higher up to avoid overlap with bottom toolbar
-            cupY = (height / 2) - 100;
-        }
-
-        this.cupDimensions = { x: cupX, y: cupY, width: cupWidth, height: cupHeight };
+        this.updateLayout(width, height);
 
         const partOptions = {
             render: {
@@ -115,9 +116,11 @@ class VirtualCup {
             isStatic: true
         };
 
-        const bottom = Bodies.rectangle(cupX, cupY + cupHeight / 2, cupWidth + wallThickness, wallThickness, partOptions);
-        const leftWall = Bodies.rectangle(cupX - cupWidth / 2, cupY, wallThickness, cupHeight, partOptions);
-        const rightWall = Bodies.rectangle(cupX + cupWidth / 2, cupY, wallThickness, cupHeight, partOptions);
+        const { x: cupX, y: cupY, width: cupWidth, height: cupHeight } = this.cupDimensions;
+
+        const bottom = Bodies.rectangle(cupX, cupY + cupHeight / 2, cupWidth + 10, 10, partOptions);
+        const leftWall = Bodies.rectangle(cupX - cupWidth / 2, cupY, 10, cupHeight, partOptions);
+        const rightWall = Bodies.rectangle(cupX + cupWidth / 2, cupY, 10, cupHeight, partOptions);
 
         this.cup = Body.create({
             parts: [bottom, leftWall, rightWall],
@@ -143,30 +146,35 @@ class VirtualCup {
         this.render.mouse = mouse;
 
         window.addEventListener('resize', () => {
-            this.render.canvas.width = window.innerWidth;
-            this.render.canvas.height = window.innerHeight;
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            this.render.canvas.width = w;
+            this.render.canvas.height = h;
+
+            // Recalculate layout and update cup position on resize
+            this.updateLayout(w, h);
+            if (this.cup) {
+                Body.setPosition(this.cup, { x: this.cupDimensions.x, y: this.cupDimensions.y });
+            }
         });
 
+        // Loop Logic
         Events.on(this.runner, 'afterTick', () => {
             const allBodies = Composite.allBodies(this.world);
-
             const bTop = -1000;
             const bBottom = window.innerHeight + 100;
             const bLeft = -100;
             const bRight = window.innerWidth + 100;
 
             const bodiesToRemove = [];
-
             for (let i = 0; i < allBodies.length; i++) {
                 const body = allBodies[i];
                 if (body.isStatic || body.label === 'cup') continue;
-
                 if (body.position.y > bBottom || body.position.y < bTop ||
                     body.position.x > bRight || body.position.x < bLeft) {
                     bodiesToRemove.push(body);
                 }
             }
-
             if (bodiesToRemove.length > 0) {
                 Composite.remove(this.world, bodiesToRemove);
             }
@@ -178,7 +186,6 @@ class VirtualCup {
             for (let b of currentBodies) {
                 if (!b.isStatic && b.label !== 'cup') dynamicCount++;
             }
-
             const gx = this.engine.gravity.x.toFixed(2);
             const gy = this.engine.gravity.y.toFixed(2);
             this.debugInfo.innerHTML = `
@@ -205,7 +212,6 @@ class VirtualCup {
                 const rad = orientation * (Math.PI / 180);
                 const finalX = rawX * Math.cos(rad) + rawY * Math.sin(rad);
                 const finalY = -rawX * Math.sin(rad) + rawY * Math.cos(rad);
-
                 this.engine.gravity.x = finalX;
                 this.engine.gravity.y = finalY;
 
@@ -218,7 +224,6 @@ class VirtualCup {
         } else {
             this.engine.gravity.x = 0;
             this.engine.gravity.y = 1;
-
             let isDragging = false;
             let startX = 0;
             document.addEventListener('mousedown', (e) => {
@@ -266,7 +271,6 @@ class VirtualCup {
 
     explode(bombBody, forceMagnitude) {
         if (!bombBody || !this.world.bodies.includes(bombBody)) return;
-
         const radius = forceMagnitude * 300;
         const allBodies = Composite.allBodies(this.world);
         allBodies.forEach(b => {
@@ -287,77 +291,38 @@ class VirtualCup {
 
     addItems(type, count = 20) {
         if (type === 'bomb' || type === 'big_bomb') count = 1;
-
         const spawnX = window.innerWidth / 2;
         const spawnY = this.cupDimensions.y - this.cupDimensions.height / 2 - 100;
-
         const spread = this.cupDimensions.width / 2;
         const newBodies = [];
-
         for (let i = 0; i < count; i++) {
-            const x = (type === 'bomb' || type === 'big_bomb')
-                ? spawnX
-                : spawnX + (Math.random() - 0.5) * spread;
-
+            const x = (type === 'bomb' || type === 'big_bomb') ? spawnX : spawnX + (Math.random() - 0.5) * spread;
             const y = spawnY - Math.random() * 50;
             let body;
-
-            const commonDynamic = {
-                isStatic: false,
-                sleepThreshold: 60
-            };
-
+            const commonDynamic = { isStatic: false, sleepThreshold: 60 };
             if (type === 'water') {
-                body = Bodies.circle(x, y, 6, {
-                    isStatic: false, friction: 0.0, frictionStatic: 0.0, frictionAir: 0.0, restitution: 0.0, density: 1.0, slop: 0.0,
-                    render: { fillStyle: '#3498db', opacity: 0.8 }
-                });
+                body = Bodies.circle(x, y, 6, { isStatic: false, friction: 0.0, frictionStatic: 0.0, frictionAir: 0.0, restitution: 0.0, density: 1.0, slop: 0.0, render: { fillStyle: '#3498db', opacity: 0.8 } });
             } else if (type === 'wood') {
-                body = Bodies.rectangle(x, y, Common.random(15, 25), Common.random(15, 25), {
-                    isStatic: false, density: 0.0005, frictionAir: 0.02, render: { fillStyle: '#8d6e63' }
-                });
+                body = Bodies.rectangle(x, y, Common.random(15, 25), Common.random(15, 25), { isStatic: false, density: 0.0005, frictionAir: 0.02, render: { fillStyle: '#8d6e63' } });
             } else if (type === 'ball') {
-                body = Bodies.circle(x, y, Common.random(10, 15), {
-                    isStatic: false, restitution: 0.9, render: { fillStyle: '#e67e22' }
-                });
+                body = Bodies.circle(x, y, Common.random(10, 15), { isStatic: false, restitution: 0.9, render: { fillStyle: '#e67e22' } });
             } else if (type === 'ice') {
-                body = Bodies.rectangle(x, y, Common.random(12, 18), Common.random(12, 18), {
-                    isStatic: false, friction: 0.1, restitution: 0.1, render: { fillStyle: '#a29bfe', opacity: 0.6 }
-                });
+                body = Bodies.rectangle(x, y, Common.random(12, 18), Common.random(12, 18), { isStatic: false, friction: 0.1, restitution: 0.1, render: { fillStyle: '#a29bfe', opacity: 0.6 } });
             } else if (type === 'popcorn') {
-                body = Bodies.polygon(x, y, Math.floor(Math.random() * 4) + 3, Common.random(8, 12), {
-                    isStatic: false, restitution: 0.5, density: 0.0001, render: { fillStyle: '#fdcb6e' }
-                });
+                body = Bodies.polygon(x, y, Math.floor(Math.random() * 4) + 3, Common.random(8, 12), { isStatic: false, restitution: 0.5, density: 0.0001, render: { fillStyle: '#fdcb6e' } });
             } else if (type === 'stone') {
-                body = Bodies.polygon(x, y, Math.floor(Math.random() * 3) + 5, Common.random(15, 20), {
-                    isStatic: false, density: 0.05, friction: 0.5, restitution: 0.1, render: { fillStyle: '#7f8c8d' }
-                });
+                body = Bodies.polygon(x, y, Math.floor(Math.random() * 3) + 5, Common.random(15, 20), { isStatic: false, density: 0.05, friction: 0.5, restitution: 0.1, render: { fillStyle: '#7f8c8d' } });
             } else if (type === 'slime') {
-                body = Bodies.circle(x, y, Common.random(8, 12), {
-                    isStatic: false, restitution: 1.2, friction: 0.5, density: 0.002, render: { fillStyle: '#2ecc71', opacity: 0.8 }
-                });
+                body = Bodies.circle(x, y, Common.random(8, 12), { isStatic: false, restitution: 1.2, friction: 0.5, density: 0.002, render: { fillStyle: '#2ecc71', opacity: 0.8 } });
             } else if (type === 'gold') {
-                body = Bodies.rectangle(x, y, 20, 5, {
-                    isStatic: false, density: 0.1, restitution: 0.0, friction: 0.05, render: { fillStyle: '#f1c40f' }
-                });
+                body = Bodies.rectangle(x, y, 20, 5, { isStatic: false, density: 0.1, restitution: 0.0, friction: 0.05, render: { fillStyle: '#f1c40f' } });
             } else if (type === 'bomb') {
-                body = Bodies.circle(x, y, 15, {
-                    isStatic: false,
-                    density: 0.01, restitution: 0.5,
-                    render: { fillStyle: '#2c3e50', strokeStyle: '#e74C3C', lineWidth: 2 },
-                    label: 'bomb'
-                });
+                body = Bodies.circle(x, y, 15, { isStatic: false, density: 0.01, restitution: 0.5, render: { fillStyle: '#2c3e50', strokeStyle: '#e74C3C', lineWidth: 2 }, label: 'bomb' });
                 this.armBomb(body, false);
             } else if (type === 'big_bomb') {
-                body = Bodies.circle(x, y, 25, {
-                    isStatic: false,
-                    density: 0.02, restitution: 0.4,
-                    render: { fillStyle: '#8e44ad', strokeStyle: '#f1c40f', lineWidth: 4 },
-                    label: 'big_bomb'
-                });
+                body = Bodies.circle(x, y, 25, { isStatic: false, density: 0.02, restitution: 0.4, render: { fillStyle: '#8e44ad', strokeStyle: '#f1c40f', lineWidth: 4 }, label: 'big_bomb' });
                 this.armBomb(body, true);
             }
-
             if (body) newBodies.push(body);
         }
         Composite.add(this.world, newBodies);

@@ -206,9 +206,40 @@ class VirtualCup {
         }
     }
 
+    armBomb(bombBody) {
+        let ticks = 0;
+        const colorInterval = setInterval(() => {
+            if (!bombBody) { clearInterval(colorInterval); return; }
+            bombBody.render.fillStyle = (ticks % 2 === 0) ? '#e74c3c' : '#2c3e50';
+            ticks++;
+            if (ticks >= 6) {
+                clearInterval(colorInterval);
+                this.explode(bombBody);
+            }
+        }, 500);
+    }
+
+    explode(bombBody) {
+        const forceMagnitude = 0.5;
+        const allBodies = Composite.allBodies(this.world);
+        allBodies.forEach(b => {
+            if (b === bombBody || b.isStatic) return;
+            const dx = b.position.x - bombBody.position.x;
+            const dy = b.position.y - bombBody.position.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 300) {
+                const force = forceMagnitude * (1 - dist / 300);
+                Body.applyForce(b, b.position, {
+                    x: (dx / dist) * force,
+                    y: (dy / dist) * force
+                });
+            }
+        });
+        Composite.remove(this.world, bombBody);
+    }
+
     // --- Dynamic Item Spawner ---
     addItems(type, count = 20) {
-        // Bomb only spawns 1
         if (type === 'bomb') count = 1;
 
         const spawnX = window.innerWidth / 2;
@@ -216,12 +247,14 @@ class VirtualCup {
         const spread = this.cupDimensions.width / 2;
         const newBodies = [];
 
+        // Colors for Confetti
+        const confettiColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c'];
+
         for (let i = 0; i < count; i++) {
             const x = spawnX + (Math.random() - 0.5) * spread;
             const y = spawnY - Math.random() * 100;
             let body;
 
-            // --- Previous Items ---
             if (type === 'water') {
                 body = Bodies.circle(x, y, 6, {
                     friction: 0.0, frictionStatic: 0.0, frictionAir: 0.0, restitution: 0.0, density: 1.0, slop: 0.0,
@@ -243,30 +276,28 @@ class VirtualCup {
                 body = Bodies.polygon(x, y, Math.floor(Math.random() * 4) + 3, Common.random(8, 12), {
                     restitution: 0.5, density: 0.0001, render: { fillStyle: '#fdcb6e' }
                 });
-            }
-            // --- New Items ---
-            else if (type === 'stone') {
-                // Heavy, High Friction, Irregular Polygon
+            } else if (type === 'stone') {
                 body = Bodies.polygon(x, y, Math.floor(Math.random() * 3) + 5, Common.random(15, 20), {
                     density: 0.05, friction: 0.5, restitution: 0.1, render: { fillStyle: '#7f8c8d' }
                 });
             } else if (type === 'slime') {
-                // Bouncy, sticky
                 body = Bodies.circle(x, y, Common.random(8, 12), {
                     restitution: 1.2, friction: 0.5, density: 0.002, render: { fillStyle: '#2ecc71', opacity: 0.8 }
                 });
             } else if (type === 'gold') {
-                // Thin, Flat, Heavy
                 body = Bodies.rectangle(x, y, 20, 5, {
                     density: 0.1, restitution: 0.0, friction: 0.05, render: { fillStyle: '#f1c40f' }
                 });
             } else if (type === 'paper') {
-                // Very light, high air friction
+                // Color Paper Logic
+                // Random color from list
+                const color = Common.choose(confettiColors);
+
                 body = Bodies.rectangle(x, y, 20, 25, {
-                    density: 0.0001, frictionAir: 0.1, restitution: 0.0, render: { fillStyle: '#ecf0f1' }
+                    density: 0.0001, frictionAir: 0.1, restitution: 0.0,
+                    render: { fillStyle: color } // Apply random color
                 });
             } else if (type === 'bomb') {
-                // Bomb Logic
                 body = Bodies.circle(x, y, 15, {
                     density: 0.01, restitution: 0.5,
                     render: { fillStyle: '#2c3e50', strokeStyle: '#e74C3C', lineWidth: 2 },
@@ -278,49 +309,6 @@ class VirtualCup {
             if (body) newBodies.push(body);
         }
         Composite.add(this.world, newBodies);
-    }
-
-    armBomb(bombBody) {
-        // 3 Second Countdown
-        let ticks = 0;
-        const colorInterval = setInterval(() => {
-            if (!bombBody) { clearInterval(colorInterval); return; }
-
-            // Blink Red
-            bombBody.render.fillStyle = (ticks % 2 === 0) ? '#e74c3c' : '#2c3e50';
-            ticks++;
-
-            if (ticks >= 6) { // 3 seconds (approx 500ms * 6)
-                clearInterval(colorInterval);
-                this.explode(bombBody);
-            }
-        }, 500);
-    }
-
-    explode(bombBody) {
-        // Explosion Force
-        const forceMagnitude = 0.5; // Strong force
-        const allBodies = Composite.allBodies(this.world);
-
-        allBodies.forEach(b => {
-            if (b === bombBody || b.isStatic) return;
-
-            const dx = b.position.x - bombBody.position.x;
-            const dy = b.position.y - bombBody.position.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist < 300) { // Blast Radius
-                const force = forceMagnitude * (1 - dist / 300);
-                Body.applyForce(b, b.position, {
-                    x: (dx / dist) * force,
-                    y: (dy / dist) * force
-                });
-            }
-        });
-
-        // Visual Flash? (Optional, maybe particle later)
-        // Remove Bomb
-        Composite.remove(this.world, bombBody);
     }
 }
 

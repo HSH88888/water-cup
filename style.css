@@ -2,18 +2,15 @@ body {
     margin: 0;
     padding: 0;
     overflow: hidden;
-    /* Prevent scroll */
-    background: #0f2027;
-    /* Deep blue background */
     background: linear-gradient(to bottom, #2c5364, #203a43, #0f2027);
     font-family: 'Fredoka', sans-serif;
     color: white;
     touch-action: none;
+    user-select: none;
 }
 
 canvas {
     display: block;
-    /* Remove gap */
     width: 100vw;
     height: 100vh;
 }
@@ -25,12 +22,21 @@ canvas {
     width: 100%;
     height: 100%;
     pointer-events: none;
-    /* Let touches pass through to canvas if needed */
+    z-index: 10;
+}
+
+/* Start Screen */
+.start-screen {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: auto;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    z-index: 10;
+    width: 100%;
 }
 
 h1 {
@@ -46,11 +52,10 @@ h1 {
 }
 
 .start-btn {
-    pointer-events: auto;
     background: white;
     color: #0f2027;
     border: none;
-    padding: 15px 40px;
+    padding: 15px 50px;
     font-size: 1.5rem;
     border-radius: 50px;
     font-family: inherit;
@@ -64,12 +69,72 @@ h1 {
     transform: scale(0.95);
 }
 
+/* Simulation UI */
+.sim-ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 10px;
+}
+
+.toolbar-scroll {
+    overflow-x: auto;
+    padding-bottom: 10px;
+    /* Space for scrollbar hide */
+    -webkit-overflow-scrolling: touch;
+    pointer-events: auto;
+}
+
+.toolbar-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.toolbar {
+    display: flex;
+    gap: 12px;
+    padding: 10px;
+    justify-content: center;
+    /* Center if few items */
+    min-width: max-content;
+}
+
+.tool-btn {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 10px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-width: 60px;
+}
+
+.tool-btn:active {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(0.95);
+}
+
+.tool-btn .emoji {
+    font-size: 24px;
+}
+
+.tool-btn .label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
 .reset-btn {
     pointer-events: auto;
     position: absolute;
-    top: 20px;
+    bottom: 30px;
     right: 20px;
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(231, 76, 60, 0.8);
+    /* Red for reset */
     border: none;
     color: white;
     width: 50px;
@@ -80,12 +145,10 @@ h1 {
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(5px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
 }
 
-/* Hide start interface when running */
-body.running .ui-layer h1,
-body.running .ui-layer .status,
-body.running .ui-layer .start-btn {
+/* Hide start screen when active */
+body.running .start-screen {
     display: none;
 }

@@ -6,25 +6,52 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Virtual Water Cup</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600&display=swap" rel="stylesheet">
-    <!-- Matter.js Physics Engine -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 </head>
 
 <body>
 
-    <!-- Physics Canvas will be appended here -->
-
     <div class="ui-layer">
-        <h1>💧 Shake Me!</h1>
-        <p class="status">핸드폰을 흔들어보세요</p>
+        <!-- Start Screen -->
+        <div id="startScreen" class="start-screen">
+            <h1>💧 Shake Me!</h1>
+            <p class="status">핸드폰을 흔들어보세요</p>
+            <button id="startBtn" class="start-btn">시작하기</button>
+        </div>
 
-        <button id="startBtn" class="start-btn">물 따르기 (시작)</button>
-        <button id="resetBtn" class="reset-btn icon-btn" aria-label="리셋">↺</button>
+        <!-- Simulation UI (Hidden initially) -->
+        <div id="simUi" class="sim-ui" style="display: none;">
+            <div class="toolbar-scroll">
+                <div class="toolbar">
+                    <button class="tool-btn" onclick="app.addItems('water')">
+                        <span class="emoji">💧</span>
+                        <span class="label">물</span>
+                    </button>
+                    <button class="tool-btn" onclick="app.addItems('wood')">
+                        <span class="emoji">🟤</span>
+                        <span class="label">나무</span>
+                    </button>
+                    <button class="tool-btn" onclick="app.addItems('ball')">
+                        <span class="emoji">🏀</span>
+                        <span class="label">공</span>
+                    </button>
+                    <button class="tool-btn" onclick="app.addItems('ice')">
+                        <span class="emoji">🧊</span>
+                        <span class="label">얼음</span>
+                    </button>
+                    <button class="tool-btn" onclick="app.addItems('popcorn')">
+                        <span class="emoji">🍿</span>
+                        <span class="label">팝콘</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <button id="resetBtn" class="reset-btn" aria-label="리셋">↺</button>
     </div>
 
-    <script src="app.js?v=3"></script>
+    <script src="app.js?v=4"></script>
 </body>
 
 </html>

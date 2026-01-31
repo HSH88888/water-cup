@@ -144,11 +144,13 @@ class VirtualCup {
         // Loop Logic
         Events.on(this.runner, 'afterTick', () => {
             const allBodies = Composite.allBodies(this.world);
-            const boundsPadding = 100;
-            const bTop = -boundsPadding;
-            const bBottom = window.innerHeight + boundsPadding;
-            const bLeft = -boundsPadding;
-            const bRight = window.innerWidth + boundsPadding;
+
+            // Adjust Bounds for Cleanup
+            // Top bound must be very high to allow spawning from above screen
+            const bTop = -1000;
+            const bBottom = window.innerHeight + 100;
+            const bLeft = -100;
+            const bRight = window.innerWidth + 100;
 
             const bodiesToRemove = [];
 
@@ -245,14 +247,19 @@ class VirtualCup {
         if (type === 'bomb') count = 1;
 
         const spawnX = window.innerWidth / 2;
-        const spawnY = this.cupDimensions.y - this.cupDimensions.height / 2 - 100;
+        // Adjusted spawnY: Use Cup Top Edge (-50px inside cup) instead of way above
+        // CupY is center. Top edge is y - height/2.
+        // We spawn at y - height/2 + 20 (Just inside)
+        const spawnY = this.cupDimensions.y - this.cupDimensions.height / 2 + 50;
+
         const spread = this.cupDimensions.width / 2;
         const newBodies = [];
         const confettiColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c'];
 
         for (let i = 0; i < count; i++) {
             const x = spawnX + (Math.random() - 0.5) * spread;
-            const y = spawnY - Math.random() * 100;
+            // Add some randomness to Y but stay visible
+            const y = spawnY - Math.random() * 50;
             let body;
 
             const commonDynamic = {
@@ -302,7 +309,7 @@ class VirtualCup {
                 });
             } else if (type === 'bomb') {
                 body = Bodies.circle(x, y, 15, {
-                    ...commonDynamic, // ADDED: Apply common dynamic properties (isStatic: false)
+                    ...commonDynamic,
                     density: 0.01, restitution: 0.5,
                     render: { fillStyle: '#2c3e50', strokeStyle: '#e74C3C', lineWidth: 2 },
                     label: 'bomb'

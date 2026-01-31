@@ -1,0 +1,91 @@
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    /* Prevent scroll */
+    background: #0f2027;
+    /* Deep blue background */
+    background: linear-gradient(to bottom, #2c5364, #203a43, #0f2027);
+    font-family: 'Fredoka', sans-serif;
+    color: white;
+    touch-action: none;
+}
+
+canvas {
+    display: block;
+    /* Remove gap */
+    width: 100vw;
+    height: 100vh;
+}
+
+.ui-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    /* Let touches pass through to canvas if needed */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+h1 {
+    font-size: 3rem;
+    margin-bottom: 10px;
+    text-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+.status {
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 40px;
+}
+
+.start-btn {
+    pointer-events: auto;
+    background: white;
+    color: #0f2027;
+    border: none;
+    padding: 15px 40px;
+    font-size: 1.5rem;
+    border-radius: 50px;
+    font-family: inherit;
+    font-weight: 600;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.start-btn:active {
+    transform: scale(0.95);
+}
+
+.reset-btn {
+    pointer-events: auto;
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+}
+
+/* Hide start interface when running */
+body.running .ui-layer h1,
+body.running .ui-layer .status,
+body.running .ui-layer .start-btn {
+    display: none;
+}

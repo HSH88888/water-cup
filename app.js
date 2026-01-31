@@ -21,6 +21,9 @@ class VirtualCup {
         this.runner = null;
         this.cup = null; // Store cup body to rotate it
 
+        // Flag to prevent mouse interference on mobile
+        this.sensorActive = false;
+
         // Elements
         this.startBtn = document.getElementById('startBtn');
         this.simUi = document.getElementById('simUi');
@@ -79,10 +82,6 @@ class VirtualCup {
 
         this.cupDimensions = { x: cupX, y: cupY, width: cupWidth, height: cupHeight };
 
-        // Parts positions are relative to the Container Body center
-        // But Body.create with parts calculates center automatically.
-        // It's safer to create parts first.
-
         // Glass Style
         const partOptions = {
             render: {
@@ -102,8 +101,7 @@ class VirtualCup {
         // Combine into one Single Body to rotate together
         this.cup = Body.create({
             parts: [bottom, leftWall, rightWall],
-            isStatic: true, // It stays in place but can rotate? 
-            // Static bodies in Matter.js can be roatated manually
+            isStatic: true,
             friction: 0.1
         });
 
@@ -118,6 +116,14 @@ class VirtualCup {
         Runner.run(this.runner, this.engine);
 
         // --- Interaction ---
+        // MouseConstraint allows dragging objects (water, ice)
+        // Check if we want to disable this on mobile too?
+        // User said "mouse click effect affects strangely".
+        // Usually MouseConstraint is fine, but maybe touch events are double-handled.
+        // Let's keep MouseConstraint but maybe disable it if sensorActive?
+        // Matter.js Mouse handles touch automatically. 
+        // We will leave it for object interaction, but fix the Cup Rotation conflict below.
+
         const mouse = Mouse.create(this.render.canvas);
         const mouseConstraint = MouseConstraint.create(this.engine, {
             mouse: mouse,
@@ -129,7 +135,6 @@ class VirtualCup {
         window.addEventListener('resize', () => {
             this.render.canvas.width = window.innerWidth;
             this.render.canvas.height = window.innerHeight;
-            // Repositioning cup logic omitted for simplicity
         });
     }
 
@@ -138,15 +143,13 @@ class VirtualCup {
         window.addEventListener('deviceorientation', (event) => {
             if (event.gamma === null) return;
 
+            // Sensor is working, so disable mouse rotation logic
+            this.sensorActive = true;
+
             // Gamma is left/right tilt (-90 to 90)
-            // Convert to radians directly
             const tiltAngle = (event.gamma) * (Math.PI / 180);
 
-            // Limit tilt to prevent flipping completely? No, let user flip it!
-            // But map it nicely.
-
             if (this.cup) {
-                // Set rotation directly
                 Body.setAngle(this.cup, tiltAngle);
             }
         });
@@ -156,13 +159,17 @@ class VirtualCup {
         let startX = 0;
 
         document.addEventListener('mousedown', (e) => {
+            // Prevent conflict: If sensor is active, ignore mouse rotation
+            if (this.sensorActive) return;
+
             if (e.target.tagName === 'BUTTON' || e.target.closest('.toolbar')) return;
             isDragging = true;
             startX = e.clientX;
         });
 
         document.addEventListener('mousemove', (e) => {
-            if (!isDragging || !this.cup) return;
+            // Prevent conflict
+            if (this.sensorActive || !isDragging || !this.cup) return;
 
             const currentX = e.clientX;
             const deltaX = currentX - startX;
@@ -175,13 +182,13 @@ class VirtualCup {
         });
 
         document.addEventListener('mouseup', () => {
-            isDragging = false;
-            // Optional: Auto-reset cup to upright?
-            // Body.setAngle(this.cup, 0); 
+            if (this.sensorActive) return;
 
-            // Or simple animation back to 0
+            isDragging = false;
+
+            // Auto-return animation
             const resetInterval = setInterval(() => {
-                if (isDragging) { clearInterval(resetInterval); return; }
+                if (isDragging || this.sensorActive) { clearInterval(resetInterval); return; }
 
                 if (Math.abs(this.cup.angle) < 0.05) {
                     Body.setAngle(this.cup, 0);
@@ -195,7 +202,6 @@ class VirtualCup {
 
     // --- Dynamic Item Spawner ---
     addItems(type, count = 20) {
-        // Drop from top center, independent of cup rotation
         const spawnX = window.innerWidth / 2;
         const spawnY = this.cupDimensions.y - this.cupDimensions.height - 50;
         const spread = this.cupDimensions.width / 2;
@@ -207,7 +213,6 @@ class VirtualCup {
             const y = spawnY - Math.random() * 100;
 
             let body;
-            // ... (Same item types as before) ...
             if (type === 'water') {
                 body = Bodies.circle(x, y, Common.random(4, 7), {
                     friction: 0.001, restitution: 0.1, frictionAir: 0.01, render: { fillStyle: '#3498db' }

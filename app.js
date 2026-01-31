@@ -123,6 +123,24 @@ class VirtualCup {
         this.runner = Runner.create();
         Runner.run(this.runner, this.engine);
 
+        // 5. Add Mouse Interaction
+        const Mouse = Matter.Mouse,
+            MouseConstraint = Matter.MouseConstraint;
+
+        const mouse = Mouse.create(this.render.canvas);
+        const mouseConstraint = MouseConstraint.create(this.engine, {
+            mouse: mouse,
+            constraint: {
+                stiffness: 0.2,
+                render: {
+                    visible: false
+                }
+            }
+        });
+
+        Composite.add(this.world, mouseConstraint);
+        this.render.mouse = mouse; // Sync render with mouse
+
         // Resize Handler
         window.addEventListener('resize', () => {
             this.render.canvas.width = window.innerWidth;

@@ -236,11 +236,50 @@ class VirtualCup {
         }
     }
 
+    armBomb(bombBody) {
+        let ticks = 0;
+        const colorInterval = setInterval(() => {
+            // Check if body was removed
+            if (!bombBody || !this.world.bodies.includes(bombBody)) {
+                clearInterval(colorInterval); return;
+            }
+            // Ensure render object exists
+            if (bombBody.render) {
+                bombBody.render.fillStyle = (ticks % 2 === 0) ? '#e74c3c' : '#2c3e50';
+            }
+            ticks++;
+            if (ticks >= 6) {
+                clearInterval(colorInterval);
+                this.explode(bombBody);
+            }
+        }, 500);
+    }
+
+    explode(bombBody) {
+        if (!bombBody || !this.world.bodies.includes(bombBody)) return;
+
+        const forceMagnitude = 0.5;
+        const allBodies = Composite.allBodies(this.world);
+        allBodies.forEach(b => {
+            if (b === bombBody || b.isStatic) return;
+            const dx = b.position.x - bombBody.position.x;
+            const dy = b.position.y - bombBody.position.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 300) {
+                const force = forceMagnitude * (1 - dist / 300);
+                Body.applyForce(b, b.position, {
+                    x: (dx / dist) * force,
+                    y: (dy / dist) * force
+                });
+            }
+        });
+        Composite.remove(this.world, bombBody);
+    }
+
     addItems(type, count = 20) {
         if (type === 'bomb') count = 1;
 
         const spawnX = window.innerWidth / 2;
-        // Revert spawn height to original as requested
         const spawnY = this.cupDimensions.y - this.cupDimensions.height / 2 - 100;
 
         const spread = this.cupDimensions.width / 2;
@@ -248,8 +287,6 @@ class VirtualCup {
         const confettiColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c'];
 
         for (let i = 0; i < count; i++) {
-            // FIX: If it is a Bomb, force Center X position. Do not randomize.
-            // This guarantees it falls into the cup and is not lost if randomization pushes it too far.
             const x = (type === 'bomb')
                 ? spawnX
                 : spawnX + (Math.random() - 0.5) * spread;
@@ -257,54 +294,53 @@ class VirtualCup {
             const y = spawnY - Math.random() * 50;
             let body;
 
-            const commonDynamic = {
-                isStatic: false,
-                sleepThreshold: 60
-            };
+            // Revert: Don't use a shared object, define per item to avoid side effects
+            // Ensure 'isStatic: false' is set for all.
 
             if (type === 'water') {
                 body = Bodies.circle(x, y, 6, {
-                    ...commonDynamic,
-                    friction: 0.0, frictionStatic: 0.0, frictionAir: 0.0, restitution: 0.0, density: 1.0, slop: 0.0,
+                    isStatic: false, friction: 0.0, frictionStatic: 0.0, frictionAir: 0.0, restitution: 0.0, density: 1.0, slop: 0.0,
                     render: { fillStyle: '#3498db', opacity: 0.8 }
                 });
             } else if (type === 'wood') {
                 body = Bodies.rectangle(x, y, Common.random(15, 25), Common.random(15, 25), {
-                    ...commonDynamic, density: 0.0005, frictionAir: 0.02, render: { fillStyle: '#8d6e63' }
+                    isStatic: false, density: 0.0005, frictionAir: 0.02, render: { fillStyle: '#8d6e63' }
                 });
             } else if (type === 'ball') {
                 body = Bodies.circle(x, y, Common.random(10, 15), {
-                    ...commonDynamic, restitution: 0.9, render: { fillStyle: '#e67e22' }
+                    isStatic: false, restitution: 0.9, render: { fillStyle: '#e67e22' }
                 });
             } else if (type === 'ice') {
                 body = Bodies.rectangle(x, y, Common.random(12, 18), Common.random(12, 18), {
-                    ...commonDynamic, friction: 0.1, restitution: 0.1, render: { fillStyle: '#a29bfe', opacity: 0.6 }
+                    isStatic: false, friction: 0.1, restitution: 0.1, render: { fillStyle: '#a29bfe', opacity: 0.6 }
                 });
             } else if (type === 'popcorn') {
                 body = Bodies.polygon(x, y, Math.floor(Math.random() * 4) + 3, Common.random(8, 12), {
-                    ...commonDynamic, restitution: 0.5, density: 0.0001, render: { fillStyle: '#fdcb6e' }
+                    isStatic: false, restitution: 0.5, density: 0.0001, render: { fillStyle: '#fdcb6e' }
                 });
             } else if (type === 'stone') {
                 body = Bodies.polygon(x, y, Math.floor(Math.random() * 3) + 5, Common.random(15, 20), {
-                    ...commonDynamic, density: 0.05, friction: 0.5, restitution: 0.1, render: { fillStyle: '#7f8c8d' }
+                    isStatic: false, density: 0.05, friction: 0.5, restitution: 0.1, render: { fillStyle: '#7f8c8d' }
                 });
             } else if (type === 'slime') {
                 body = Bodies.circle(x, y, Common.random(8, 12), {
-                    ...commonDynamic, restitution: 1.2, friction: 0.5, density: 0.002, render: { fillStyle: '#2ecc71', opacity: 0.8 }
+                    isStatic: false, restitution: 1.2, friction: 0.5, density: 0.002, render: { fillStyle: '#2ecc71', opacity: 0.8 }
                 });
             } else if (type === 'gold') {
                 body = Bodies.rectangle(x, y, 20, 5, {
-                    ...commonDynamic, density: 0.1, restitution: 0.0, friction: 0.05, render: { fillStyle: '#f1c40f' }
+                    isStatic: false, density: 0.1, restitution: 0.0, friction: 0.05, render: { fillStyle: '#f1c40f' }
                 });
             } else if (type === 'paper') {
                 const color = Common.choose(confettiColors);
                 body = Bodies.rectangle(x, y, 20, 25, {
-                    ...commonDynamic, density: 0.0001, frictionAir: 0.1, restitution: 0.0,
+                    isStatic: false, density: 0.0001, frictionAir: 0.1, restitution: 0.0,
                     render: { fillStyle: color }
                 });
             } else if (type === 'bomb') {
+                // FIXED BOMB: NO sleepThreshold, FORCE isStatic: false
                 body = Bodies.circle(x, y, 15, {
-                    ...commonDynamic,
+                    isStatic: false,
+                    // Remove sleepThreshold to safely allow updates
                     density: 0.01, restitution: 0.5,
                     render: { fillStyle: '#2c3e50', strokeStyle: '#e74C3C', lineWidth: 2 },
                     label: 'bomb'

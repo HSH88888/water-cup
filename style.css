@@ -152,3 +152,19 @@ h1 {
 body.running .start-screen {
     display: none;
 }
+/* Debug Info Panel */
+.debug-info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-family: monospace;
+    font-size: 12px;
+    pointer-events: none; /* 터치 방해 금지 */
+    user-select: none;
+    z-index: 1000;
+}
+

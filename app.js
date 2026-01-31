@@ -19,8 +19,6 @@ class VirtualCup {
         });
 
         // [COMMON] Default Gravity (Downwards)
-        // PC relies on this staying (0, 1). 
-        // Mobile will override this via sensors.
         this.engine.gravity.x = 0;
         this.engine.gravity.y = 1;
 
@@ -47,7 +45,6 @@ class VirtualCup {
     }
 
     start() {
-        // [MOBILE CHECK] Only request permission if mobile
         if (this.isMobile && typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
             DeviceMotionEvent.requestPermission()
                 .then(response => {
@@ -56,7 +53,6 @@ class VirtualCup {
                         this.initSensors();
                     } else {
                         alert('권한이 거부되었습니다.');
-                        // Still run physics even if denied, just no tilt
                         this.initPhysics();
                     }
                 })
@@ -65,7 +61,6 @@ class VirtualCup {
                     this.initPhysics();
                 });
         } else {
-            // [PC PATH] Direct start
             this.initPhysics();
             this.initSensors();
         }
@@ -132,7 +127,7 @@ class VirtualCup {
         this.runner = Runner.create();
         Runner.run(this.runner, this.engine);
 
-        // Interaction (Mouse/Touch for dragging objects if needed, but mainly for PC cup rotation)
+        // Interaction
         const mouse = Mouse.create(this.render.canvas);
         const mouseConstraint = MouseConstraint.create(this.engine, {
             mouse: mouse,
@@ -148,7 +143,6 @@ class VirtualCup {
 
         // Loop Logic
         Events.on(this.runner, 'afterTick', () => {
-            // Cleanup
             const allBodies = Composite.allBodies(this.world);
             const boundsPadding = 100;
             const bTop = -boundsPadding;
@@ -172,7 +166,6 @@ class VirtualCup {
                 Composite.remove(this.world, bodiesToRemove);
             }
 
-            // Debug Info
             if (!this.debugInfo) return;
             const fps = this.runner.fps || 60;
             const currentBodies = Composite.allBodies(this.world);
@@ -193,7 +186,6 @@ class VirtualCup {
 
     initSensors() {
         if (this.isMobile) {
-            // [MOBILE ONLY] Gravity follows Device Tilt
             window.addEventListener('devicemotion', (event) => {
                 const acc = event.accelerationIncludingGravity;
                 if (!acc) return;
@@ -212,7 +204,6 @@ class VirtualCup {
                 this.engine.gravity.x = finalX;
                 this.engine.gravity.y = finalY;
 
-                // Fix Cup Angle on Mobile
                 if (this.cup) {
                     Body.setAngle(this.cup, 0);
                     Body.setPosition(this.cup, { x: this.cupDimensions.x, y: this.cupDimensions.y });
@@ -220,15 +211,12 @@ class VirtualCup {
                 }
             });
         } else {
-            // [PC ONLY] Gravity is FIXED (0, 1). Cup Rotates with Mouse.
-            // Reset gravity to ensure it's correct for PC
             this.engine.gravity.x = 0;
             this.engine.gravity.y = 1;
 
             let isDragging = false;
             let startX = 0;
             document.addEventListener('mousedown', (e) => {
-                // Ignore clicks on buttons
                 if (e.target.tagName === 'BUTTON' || e.target.closest('.toolbar')) return;
                 isDragging = true;
                 startX = e.clientX;
@@ -236,12 +224,10 @@ class VirtualCup {
             document.addEventListener('mousemove', (e) => {
                 if (!isDragging || !this.cup) return;
                 const deltaX = e.clientX - startX;
-                // Rotate cup based on drag
                 Body.setAngle(this.cup, (deltaX / 300) * (Math.PI / 2));
             });
             document.addEventListener('mouseup', () => {
                 isDragging = false;
-                // Auto-center cup when released
                 const resetInterval = setInterval(() => {
                     if (isDragging) { clearInterval(resetInterval); return; }
                     if (Math.abs(this.cup.angle) < 0.05) {
@@ -259,8 +245,7 @@ class VirtualCup {
         if (type === 'bomb') count = 1;
 
         const spawnX = window.innerWidth / 2;
-        // Spawn slightly above cup
-        const spawnY = this.cupDimensions.y - this.cupDimensions.height / 2 - 100; // Increased drop height
+        const spawnY = this.cupDimensions.y - this.cupDimensions.height / 2 - 100;
         const spread = this.cupDimensions.width / 2;
         const newBodies = [];
         const confettiColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c'];
@@ -270,10 +255,9 @@ class VirtualCup {
             const y = spawnY - Math.random() * 100;
             let body;
 
-            // Common dynamic properties to ensure they fall
             const commonDynamic = {
                 isStatic: false,
-                sleepThreshold: 60 // Allow sleeping if really still, but wake on creation
+                sleepThreshold: 60
             };
 
             if (type === 'water') {
@@ -318,7 +302,8 @@ class VirtualCup {
                 });
             } else if (type === 'bomb') {
                 body = Bodies.circle(x, y, 15, {
-                    ...commonDynamic, density: 0.01, restitution: 0.5,
+                    ...commonDynamic, // ADDED: Apply common dynamic properties (isStatic: false)
+                    density: 0.01, restitution: 0.5,
                     render: { fillStyle: '#2c3e50', strokeStyle: '#e74C3C', lineWidth: 2 },
                     label: 'bomb'
                 });

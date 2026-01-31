@@ -84,12 +84,14 @@ class VirtualCup {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
+        // --- Layout Adjustment ---
         const cupWidth = Math.min(width * 0.55, 300);
         const cupHeight = Math.min(height * 0.4, 350);
         const wallThickness = 10;
 
         const cupX = width / 2;
-        const cupY = (height / 2) - 50;
+        // Moved cup down: changed -50 to +80 to reduce distance to toolbar
+        const cupY = (height / 2) + 80;
 
         this.cupDimensions = { x: cupX, y: cupY, width: cupWidth, height: cupHeight };
 
@@ -236,37 +238,36 @@ class VirtualCup {
         }
     }
 
-    armBomb(bombBody) {
+    armBomb(bombBody, isBig = false) {
         let ticks = 0;
         const colorInterval = setInterval(() => {
-            // Check if body was removed
             if (!bombBody || !this.world.bodies.includes(bombBody)) {
                 clearInterval(colorInterval); return;
             }
-            // Ensure render object exists
             if (bombBody.render) {
-                bombBody.render.fillStyle = (ticks % 2 === 0) ? '#e74c3c' : '#2c3e50';
+                const flashColor = isBig ? '#9b59b6' : '#2c3e50';
+                bombBody.render.fillStyle = (ticks % 2 === 0) ? '#e74c3c' : flashColor;
             }
             ticks++;
             if (ticks >= 6) {
                 clearInterval(colorInterval);
-                this.explode(bombBody);
+                this.explode(bombBody, isBig ? 2.5 : 0.5);
             }
         }, 500);
     }
 
-    explode(bombBody) {
+    explode(bombBody, forceMagnitude) {
         if (!bombBody || !this.world.bodies.includes(bombBody)) return;
 
-        const forceMagnitude = 0.5;
+        const radius = forceMagnitude * 300;
         const allBodies = Composite.allBodies(this.world);
         allBodies.forEach(b => {
             if (b === bombBody || b.isStatic) return;
             const dx = b.position.x - bombBody.position.x;
             const dy = b.position.y - bombBody.position.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 300) {
-                const force = forceMagnitude * (1 - dist / 300);
+            if (dist < radius) {
+                const force = forceMagnitude * (1 - dist / radius);
                 Body.applyForce(b, b.position, {
                     x: (dx / dist) * force,
                     y: (dy / dist) * force
@@ -277,25 +278,26 @@ class VirtualCup {
     }
 
     addItems(type, count = 20) {
-        if (type === 'bomb') count = 1;
+        if (type === 'bomb' || type === 'big_bomb') count = 1;
 
         const spawnX = window.innerWidth / 2;
         const spawnY = this.cupDimensions.y - this.cupDimensions.height / 2 - 100;
 
         const spread = this.cupDimensions.width / 2;
         const newBodies = [];
-        const confettiColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c'];
 
         for (let i = 0; i < count; i++) {
-            const x = (type === 'bomb')
+            const x = (type === 'bomb' || type === 'big_bomb')
                 ? spawnX
                 : spawnX + (Math.random() - 0.5) * spread;
 
             const y = spawnY - Math.random() * 50;
             let body;
 
-            // Revert: Don't use a shared object, define per item to avoid side effects
-            // Ensure 'isStatic: false' is set for all.
+            const commonDynamic = {
+                isStatic: false,
+                sleepThreshold: 60
+            };
 
             if (type === 'water') {
                 body = Bodies.circle(x, y, 6, {
@@ -330,22 +332,22 @@ class VirtualCup {
                 body = Bodies.rectangle(x, y, 20, 5, {
                     isStatic: false, density: 0.1, restitution: 0.0, friction: 0.05, render: { fillStyle: '#f1c40f' }
                 });
-            } else if (type === 'paper') {
-                const color = Common.choose(confettiColors);
-                body = Bodies.rectangle(x, y, 20, 25, {
-                    isStatic: false, density: 0.0001, frictionAir: 0.1, restitution: 0.0,
-                    render: { fillStyle: color }
-                });
             } else if (type === 'bomb') {
-                // FIXED BOMB: NO sleepThreshold, FORCE isStatic: false
                 body = Bodies.circle(x, y, 15, {
                     isStatic: false,
-                    // Remove sleepThreshold to safely allow updates
                     density: 0.01, restitution: 0.5,
                     render: { fillStyle: '#2c3e50', strokeStyle: '#e74C3C', lineWidth: 2 },
                     label: 'bomb'
                 });
-                this.armBomb(body);
+                this.armBomb(body, false);
+            } else if (type === 'big_bomb') {
+                body = Bodies.circle(x, y, 25, {
+                    isStatic: false,
+                    density: 0.02, restitution: 0.4,
+                    render: { fillStyle: '#8e44ad', strokeStyle: '#f1c40f', lineWidth: 4 },
+                    label: 'big_bomb'
+                });
+                this.armBomb(body, true);
             }
 
             if (body) newBodies.push(body);

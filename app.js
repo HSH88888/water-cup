@@ -111,6 +111,7 @@ class VirtualCup {
     }
 
     initSensors() {
+        // 1. Device Orientation (Mobile)
         window.addEventListener('deviceorientation', (event) => {
             if (event.gamma === null) return;
             const gravity = this.engine.world.gravity;
@@ -118,6 +119,63 @@ class VirtualCup {
             const y = Common.clamp(event.beta / 45, -2, 2);
             gravity.x = x;
             gravity.y = y;
+        });
+
+        // 2. Mouse Drag to Tilt (PC)
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+
+        document.addEventListener('mousedown', (e) => {
+            // Ignore if clicking buttons or interactions
+            if (e.target.tagName === 'BUTTON' || e.target.closest('.toolbar')) return;
+
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            // Calculate tilt based on position relative to center
+            // Or simple drag delta? Let's use position relative to center for "Tilting the surface"
+
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+
+            // Map mouse position to gravity (-1 to 1)
+            // Left side of screen -> Gravity Left
+            // Right side of screen -> Gravity Right
+            // Is this intuitive? Or Drag direction?
+
+            // Let's use "Holding the cup": 
+            // If I move mouse LEFT, I expect contents to slide RIGHT? (Like moving the cup under the water)
+            // NO, usually "swiping left" means "push left".
+
+            // Simple approach: Mouse Position determines "Down"
+            // If mouse is at bottom-right, gravity points to bottom-right.
+
+            const dx = e.clientX - centerX;
+            const dy = e.clientY - centerY;
+
+            // Normalize
+            const angle = Math.atan2(dy, dx);
+            const force = 1.5; // Gravity strength
+
+            this.engine.world.gravity.x = Math.cos(angle) * force;
+            this.engine.world.gravity.y = Math.sin(angle) * force;
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            // Reset gravity to normal down?
+            // Optional: Keep it tilted or reset. Let's reset for ease of use.
+            // gsap.to(this.engine.world.gravity, { x: 0, y: 1, duration: 0.5 }); // Smooth reset if libraries allowed
+
+            // Simple Reset
+            this.engine.world.gravity.x = 0;
+            this.engine.world.gravity.y = 1;
         });
     }
 

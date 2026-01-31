@@ -13,7 +13,7 @@ const Engine = Matter.Engine,
 class VirtualCup {
     constructor() {
         this.engine = Engine.create({
-            positionIterations: 20, // Max stability for thin walls
+            positionIterations: 20,
             velocityIterations: 20
         });
 
@@ -26,8 +26,9 @@ class VirtualCup {
         this.runner = null;
         this.cup = null;
 
-        // Flag to prevent mouse interference on mobile
-        this.sensorActive = false;
+        // Detect Mobile (Touch Device)
+        // If it supports touch, we assume it's mobile and DISABLE mouse rotation.
+        this.isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
         // Elements
         this.startBtn = document.getElementById('startBtn');
@@ -78,7 +79,7 @@ class VirtualCup {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
-        // --- Create Cup (Thin Glass Style) ---
+        // --- Create Cup ---
         const cupWidth = Math.min(width * 0.5, 300);
         const cupHeight = 350;
         const wallThickness = 10;
@@ -87,7 +88,6 @@ class VirtualCup {
 
         this.cupDimensions = { x: cupX, y: cupY, width: cupWidth, height: cupHeight };
 
-        // Glass Style
         const partOptions = {
             render: {
                 fillStyle: '#d2dae2',
@@ -135,75 +135,62 @@ class VirtualCup {
     }
 
     initSensors() {
-        // 1. Device Orientation (Mobile) -> Change Gravity Logic
+        // 1. Mobile Gravity (Fixed Cup)
         window.addEventListener('deviceorientation', (event) => {
             if (event.gamma === null) return;
 
-            this.sensorActive = true;
-
-            // Normalize Rotation: Cup stays fixed, Gravity changes direction.
-            // When phone tilts Right (gamma +), Gravity should pull Right (x +).
-
+            // Tilt -> Gravity Vector
             const theta = event.gamma * (Math.PI / 180);
 
-            // Limit gravity Angle to avoid weird upside-down physics if flipped too far
-            // But full 360 is fun. Let's clamp to -90 ~ 90 for stability
             let safeTheta = theta;
             if (safeTheta > Math.PI / 2) safeTheta = Math.PI / 2;
             if (safeTheta < -Math.PI / 2) safeTheta = -Math.PI / 2;
 
-            // Apply Gravity Vector
-            // x = sin(theta), y = cos(theta)
-            // e.g. 0 deg -> x=0, y=1 (Down)
-            // 90 deg -> x=1, y=0 (Right)
             this.engine.gravity.x = Math.sin(safeTheta);
             this.engine.gravity.y = Math.cos(safeTheta);
 
-            // Ensure Cup is Fixed Upright (0 degrees)
+            // FORCE Cup Angle to 0 (Fix rotation)
             if (this.cup) {
                 Body.setAngle(this.cup, 0);
             }
         });
 
-        // 2. Mouse Drag (PC Only) -> Rotate Cup
-        let isDragging = false;
-        let startX = 0;
+        // 2. PC Mouse Rotation (Strictly PC Only)
+        // If it's a mobile device (supports touch), WE DO NOT ADD THESE LISTENERS.
+        if (!this.isMobile) {
+            let isDragging = false;
+            let startX = 0;
 
-        document.addEventListener('mousedown', (e) => {
-            if (this.sensorActive) return; // Ignore on mobile
+            document.addEventListener('mousedown', (e) => {
+                if (e.target.tagName === 'BUTTON' || e.target.closest('.toolbar')) return;
+                isDragging = true;
+                startX = e.clientX;
+            });
 
-            if (e.target.tagName === 'BUTTON' || e.target.closest('.toolbar')) return;
-            isDragging = true;
-            startX = e.clientX;
-        });
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging || !this.cup) return;
 
-        document.addEventListener('mousemove', (e) => {
-            if (this.sensorActive || !isDragging || !this.cup) return;
+                const currentX = e.clientX;
+                const deltaX = currentX - startX;
 
-            const currentX = e.clientX;
-            const deltaX = currentX - startX;
+                const angle = (deltaX / 300) * (Math.PI / 2);
+                Body.setAngle(this.cup, angle);
+            });
 
-            // On PC, we still rotate the Cup because monitor doesn't tilt.
-            const angle = (deltaX / 300) * (Math.PI / 2);
-
-            Body.setAngle(this.cup, angle);
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (this.sensorActive) return;
-            isDragging = false;
-
-            const resetInterval = setInterval(() => {
-                if (isDragging || this.sensorActive) { clearInterval(resetInterval); return; }
-
-                if (Math.abs(this.cup.angle) < 0.05) {
-                    Body.setAngle(this.cup, 0);
-                    clearInterval(resetInterval);
-                } else {
-                    Body.setAngle(this.cup, this.cup.angle * 0.9);
-                }
-            }, 16);
-        });
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                // Auto reset on PC
+                const resetInterval = setInterval(() => {
+                    if (isDragging) { clearInterval(resetInterval); return; }
+                    if (Math.abs(this.cup.angle) < 0.05) {
+                        Body.setAngle(this.cup, 0);
+                        clearInterval(resetInterval);
+                    } else {
+                        Body.setAngle(this.cup, this.cup.angle * 0.9);
+                    }
+                }, 16);
+            });
+        }
     }
 
     addItems(type, count = 20) {

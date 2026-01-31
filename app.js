@@ -16,10 +16,15 @@ class VirtualCup {
             positionIterations: 20, // Max stability for thin walls
             velocityIterations: 20
         });
+
+        // Default Gravity
+        this.engine.gravity.x = 0;
+        this.engine.gravity.y = 1;
+
         this.world = this.engine.world;
         this.render = null;
         this.runner = null;
-        this.cup = null; // Store cup body to rotate it
+        this.cup = null;
 
         // Flag to prevent mouse interference on mobile
         this.sensorActive = false;
@@ -76,7 +81,7 @@ class VirtualCup {
         // --- Create Cup (Thin Glass Style) ---
         const cupWidth = Math.min(width * 0.5, 300);
         const cupHeight = 350;
-        const wallThickness = 10; // Thin walls requested
+        const wallThickness = 10;
         const cupX = width / 2;
         const cupY = height / 2 + 50;
 
@@ -85,20 +90,19 @@ class VirtualCup {
         // Glass Style
         const partOptions = {
             render: {
-                fillStyle: '#d2dae2', // Light grey/blue glass
+                fillStyle: '#d2dae2',
                 opacity: 0.6,
                 strokeStyle: '#bdc3c7',
                 lineWidth: 1
             },
-            friction: 0.05, // Slippery glass
-            restitution: 0.2 // A bit rigid
+            friction: 0.05,
+            restitution: 0.2
         };
 
         const bottom = Bodies.rectangle(cupX, cupY + cupHeight / 2, cupWidth + wallThickness, wallThickness, partOptions);
         const leftWall = Bodies.rectangle(cupX - cupWidth / 2, cupY, wallThickness, cupHeight, partOptions);
         const rightWall = Bodies.rectangle(cupX + cupWidth / 2, cupY, wallThickness, cupHeight, partOptions);
 
-        // Combine into one Single Body to rotate together
         this.cup = Body.create({
             parts: [bottom, leftWall, rightWall],
             isStatic: true,
@@ -131,34 +135,42 @@ class VirtualCup {
     }
 
     initSensors() {
-        // 1. Device Orientation (Mobile) -> Rotate Cup
+        // 1. Device Orientation (Mobile) -> Change Gravity Logic
         window.addEventListener('deviceorientation', (event) => {
             if (event.gamma === null) return;
 
-            // Sensor is working, so disable mouse rotation logic
             this.sensorActive = true;
 
-            // Gamma is left/right tilt (-90 to 90)
-            // User requested explicit 1:1 match.
-            // Convert degrees to radians directly.
-            let tiltAngle = event.gamma * (Math.PI / 180);
+            // Normalize Rotation: Cup stays fixed, Gravity changes direction.
+            // When phone tilts Right (gamma +), Gravity should pull Right (x +).
 
-            // Clamp to -90 ~ 90 degrees just in case
-            if (tiltAngle > Math.PI / 2) tiltAngle = Math.PI / 2;
-            if (tiltAngle < -Math.PI / 2) tiltAngle = -Math.PI / 2;
+            const theta = event.gamma * (Math.PI / 180);
 
+            // Limit gravity Angle to avoid weird upside-down physics if flipped too far
+            // But full 360 is fun. Let's clamp to -90 ~ 90 for stability
+            let safeTheta = theta;
+            if (safeTheta > Math.PI / 2) safeTheta = Math.PI / 2;
+            if (safeTheta < -Math.PI / 2) safeTheta = -Math.PI / 2;
+
+            // Apply Gravity Vector
+            // x = sin(theta), y = cos(theta)
+            // e.g. 0 deg -> x=0, y=1 (Down)
+            // 90 deg -> x=1, y=0 (Right)
+            this.engine.gravity.x = Math.sin(safeTheta);
+            this.engine.gravity.y = Math.cos(safeTheta);
+
+            // Ensure Cup is Fixed Upright (0 degrees)
             if (this.cup) {
-                Body.setAngle(this.cup, tiltAngle);
+                Body.setAngle(this.cup, 0);
             }
         });
 
-        // 2. Mouse Drag to Rotate (PC)
+        // 2. Mouse Drag (PC Only) -> Rotate Cup
         let isDragging = false;
         let startX = 0;
 
         document.addEventListener('mousedown', (e) => {
-            // Prevent conflict: If sensor is active, ignore mouse rotation
-            if (this.sensorActive) return;
+            if (this.sensorActive) return; // Ignore on mobile
 
             if (e.target.tagName === 'BUTTON' || e.target.closest('.toolbar')) return;
             isDragging = true;
@@ -166,14 +178,12 @@ class VirtualCup {
         });
 
         document.addEventListener('mousemove', (e) => {
-            // Prevent conflict
             if (this.sensorActive || !isDragging || !this.cup) return;
 
             const currentX = e.clientX;
             const deltaX = currentX - startX;
 
-            // Drag distance controls angle
-            // 200px drag = 45 degrees (PI/4)
+            // On PC, we still rotate the Cup because monitor doesn't tilt.
             const angle = (deltaX / 300) * (Math.PI / 2);
 
             Body.setAngle(this.cup, angle);
@@ -181,10 +191,8 @@ class VirtualCup {
 
         document.addEventListener('mouseup', () => {
             if (this.sensorActive) return;
-
             isDragging = false;
 
-            // Auto-return animation
             const resetInterval = setInterval(() => {
                 if (isDragging || this.sensorActive) { clearInterval(resetInterval); return; }
 
@@ -192,13 +200,12 @@ class VirtualCup {
                     Body.setAngle(this.cup, 0);
                     clearInterval(resetInterval);
                 } else {
-                    Body.setAngle(this.cup, this.cup.angle * 0.9); // Ease out
+                    Body.setAngle(this.cup, this.cup.angle * 0.9);
                 }
             }, 16);
         });
     }
 
-    // --- Dynamic Item Spawner ---
     addItems(type, count = 20) {
         const spawnX = window.innerWidth / 2;
         const spawnY = this.cupDimensions.y - this.cupDimensions.height - 50;

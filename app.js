@@ -26,7 +26,7 @@ class VirtualCup {
         this.runner = null;
         this.cup = null;
 
-        // Detect Mobile (Touch Device)
+        // Detect Mobile
         this.isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
         // Elements
@@ -43,7 +43,6 @@ class VirtualCup {
     }
 
     start() {
-        // Request Motion Permission (iOS 13+ support)
         if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
             DeviceMotionEvent.requestPermission()
                 .then(response => {
@@ -79,7 +78,7 @@ class VirtualCup {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
-        // --- Create Cup ---
+        // Create Cup
         const cupWidth = Math.min(width * 0.5, 300);
         const cupHeight = 350;
         const wallThickness = 10;
@@ -111,15 +110,12 @@ class VirtualCup {
 
         Composite.add(this.world, this.cup);
 
-        // Add Initial Water
         this.addItems('water', 50);
 
-        // --- Run ---
         Render.run(this.render);
         this.runner = Runner.create();
         Runner.run(this.runner, this.engine);
 
-        // --- Interaction ---
         const mouse = Mouse.create(this.render.canvas);
         const mouseConstraint = MouseConstraint.create(this.engine, {
             mouse: mouse,
@@ -131,66 +127,141 @@ class VirtualCup {
         window.addEventListener('resize', () => {
             this.render.canvas.width = window.innerWidth;
             this.render.canvas.height = window.innerHeight;
+            // Note: Canvas resize doesn't update body bounds automatically, 
+            // but keeps simulation running.
         });
     }
 
     initSensors() {
-        // 1. Mobile Gravity (Acceleration Sensor)
-        // Replaced deviceorientation with devicemotion for 360-degree support
+        // Mobile Gravity
         window.addEventListener('devicemotion', (event) => {
-            // Acceleration including gravity (x, y, z)
             const acc = event.accelerationIncludingGravity;
             if (!acc) return;
 
-            // Raw sensor values (Platform dependent, but usually m/s^2)
-            // Android: x is Right(+), y is Up(+) (Standard)
-            // iOS: x is Right(+), y is Up(+) (Standard)
-            // But gravity pulls DOWN.
-            // If phone is upright: y = +9.8 (Gravity felt pushing UP by ground? No, sensor returns Frame acceleration)
+            // 1. Raw Device Vectors (Normalized)
+            // Android/iOS Standard:
+            // x+ is Device Right
+            // y+ is Device Top
+            // z+ is Device Screen Face
+            // Gravity on Earth is DOWN.
+            // Resting Upright: acc.y ~ +9.8 (Reaction Up) OR -9.8 (Gravity Down)?
+            // Consistency Check: Upright phone usually reports y ~ -9.8 (Gravity vector) on some, +9.8 on others.
+            // My previous test `gy = acc.y` worked for Upright. That implies `acc.y` was +9.8 (Reaction).
+            // So we assume: acc points UP (Reaction).
+            // We want Gravity Down. So +Y Reaction -> +Y Gravity (Screen Bottom).
 
-            // Standard behavior:
-            // Holding phone upright: x=0, y=9.8
-            // Tilted right 90deg: x=-9.8, y=0
+            const rawX = -(acc.x || 0) / 9.8;
+            const rawY = (acc.y || 0) / 9.8;
 
-            // Matter.js Gravity: x=0, y=1 is Down on screen.
-            // We need to map sensor to screen gravity.
+            // 2. Compensate for Screen Orientation
+            // If screen rotates 180 degrees, Screen Top is Device Bottom.
+            // window.orientation is deprecated but useful. screen.orientation.angle is modern.
+            let orientation = 0;
+            if (window.screen && window.screen.orientation) {
+                orientation = window.screen.orientation.angle;
+            } else if (typeof window.orientation !== 'undefined') {
+                orientation = window.orientation;
+            }
 
-            // Let's deduce mapping:
-            // Upright (y=9.8) -> Gravity Y should be 1 (Down).
-            // Upside down (y=-9.8) -> Gravity Y should be -1 (Up).
-            // Tilted Right (x=-9.8) -> Gravity X should be 1 (Right).
-            // Tilted Left (x=9.8) -> Gravity X should be -1 (Left).
+            // Convert deg to rad
+            const rad = orientation * (Math.PI / 180);
 
-            // Wait, standard Android/iOS:
-            // Tilted Right (Landscape Left): x starts changing.
-            // Let's try direct mapping with scaling.
-            // Max Value ~9.8.
+            // Rotate the gravity vector to match Screen Coordinates
+            // If orientation is 90 (Landscape Left), Screen X is Device Y?
+            // Rotation Matrix for 2D Vector:
+            // x' = x cos(t) - y sin(t)
+            // y' = x sin(t) + y cos(t)
+            // Note: Orientation angle sign conventions vary.
+            // Usually 90 means rotated Clockwise.
+            // So we need to rotate Vector Counter-Clockwise to compensate?
+            // Actually, if Device is rotated 90 CW, "Down" is now "Left" relative to device.
+            // Screen handles the graphic rotation.
+            // We need to rotate the Gravity Vector so it stays "Down" relative to World.
 
-            // Orientation correction
-            // Screen Rotation affects coordinate system on some devices.
-            // But usually physics apps lock orientation or handle it.
-            // Let's assume Portrait mode locked or adapt simple mapping first.
+            // Try standard rotation:
+            // Portrait (0): x=gx, y=gy
+            // Upside Down (180): x=-gx, y=-gy.
+            //   If rawY was 1 (Upright), now rawY is -1 (Upside down).
+            //   We want Result Y to be 1 (Screen Bottom is Earth).
+            //   Wait, Screen Bottom is Sky now.
+            //   Earth is Screen Top (-1).
+            //   So if rawY is -1, Result is -1. 
+            //   If we just pass rawY (-1), we get -1. Correct.
+            //   So 180 deg rotation needs NO change?
+            //   Ah, if the SCREEN physically rotated 180 pixels, then coordinates flipped?
+            //   Usually mobile browser rotates content.
+            //   So coordinate (0,0) is always Top-Left visually.
 
-            // Experimentally optimal mapping:
-            // Gravity X = -acc.x / 9.8
-            // Gravity Y = acc.y / 9.8
+            // Let's rely on the rotation formula.
+            // If orientation is 180:
+            // Real rotation.
+            // We need to apply it to vector.
+            // 180 deg: x' = -x, y' = -y.
+            // If rawY was -1, y' = 1.
+            // Result 1 (Down).
+            // This means gravity points to Screen Bottom.
+            // But Screen Bottom is Sky.
+            // So water falls to Sky. (WRONG).
 
-            // Let's apply a smoothing factor or direct? Direct is responsive.
+            // Hmm. Let's look at `acc` properties. `acc` frame is DEVICE frame.
+            // If I hold phone Upside Down:
+            // Device Top is Down.
+            // `acc.y` ~ -9.8 (Reaction Up relative to device? No, Reaction is Up world, which is Device Top/Device Y+).
+            // So `acc.y` ~ +9.8.
+            // rawY ~ +1.
+            // If I don't rotate: `gy = 1`. Water falls to Screen Bottom (Sky). WRONG.
+            // If I rotate 180: `gy = -1`. Water falls to Screen Top (Earth). CORRECT.
 
-            const gx = -(acc.x || 0) / 9.8;
-            const gy = (acc.y || 0) / 9.8;
+            // So yes, we MUST rotate the vector by the orientation angle.
+            // But in which direction? 
+            // If Angle is 180, we want to negate. cos(180) = -1. 
+            // So standard rotation matrix seems correct.
+            // Invert angle sign? 
+            // Orientation 90 (Client rotated CW).
+            // We need to rotate vector CW to match new X/Y axes?
+            // Let's try `rad`.
 
-            // Apply to engine
-            this.engine.gravity.x = gx;
-            this.engine.gravity.y = gy;
+            // If Screen rotates CW (90):
+            // Screen X+ is Device Y+.
+            // Screen Y+ is Device -X.
 
-            // Force Cup Fixed
+            // Formula for rotating AXES CW:
+            // x' = x cos(t) + y sin(t)
+            // y' = -x sin(t) + y cos(t)
+
+            // Let's test Portrait (0):
+            // x' = x, y' = y. OK.
+
+            // Test 180:
+            // x' = -x, y' = -y.
+            // rawY (+1) -> -1. Water to Top (Earth). Correct.
+
+            // Test 90:
+            // x' = y (Screen X is Device Y).
+            // y' = -x (Screen Y is Device -X).
+            // Device Landscape (Left):
+            // Device Right (X+) is Up. Device Top (Y+) is Left.
+            // Gravity (Down) is Device Left (-X+?).
+            // Reaction (Up) is Device Right (X+). `acc.x` ~ +9.8.
+            // `rawX` ~ -1.
+            // `rawY` ~ 0.
+            // calc: y' = -(-1) = 1.
+            // Result: Gravity Y = 1 (Screen Bottom).
+            // Landscape mode, Screen Bottom is Earth? Yes.
+            // Correct.
+
+            const finalX = rawX * Math.cos(rad) + rawY * Math.sin(rad);
+            const finalY = -rawX * Math.sin(rad) + rawY * Math.cos(rad);
+
+            this.engine.gravity.x = finalX;
+            this.engine.gravity.y = finalY;
+
             if (this.cup) {
                 Body.setAngle(this.cup, 0);
             }
         });
 
-        // 2. PC Mouse Rotation (Strictly PC Only)
+        // PC Only
         if (!this.isMobile) {
             let isDragging = false;
             let startX = 0;
@@ -203,12 +274,8 @@ class VirtualCup {
 
             document.addEventListener('mousemove', (e) => {
                 if (!isDragging || !this.cup) return;
-
-                const currentX = e.clientX;
-                const deltaX = currentX - startX;
-
-                const angle = (deltaX / 300) * (Math.PI / 2);
-                Body.setAngle(this.cup, angle);
+                const deltaX = e.clientX - startX;
+                Body.setAngle(this.cup, (deltaX / 300) * (Math.PI / 2));
             });
 
             document.addEventListener('mouseup', () => {
@@ -230,21 +297,22 @@ class VirtualCup {
         const spawnX = window.innerWidth / 2;
         const spawnY = this.cupDimensions.y - this.cupDimensions.height - 50;
         const spread = this.cupDimensions.width / 2;
-
         const newBodies = [];
 
         for (let i = 0; i < count; i++) {
             const x = spawnX + (Math.random() - 0.5) * spread;
             const y = spawnY - Math.random() * 100;
-
             let body;
+
+            // Define item types...
+            const commonOps = { restitution: 0.2, friction: 0.1 };
             if (type === 'water') {
                 body = Bodies.circle(x, y, Common.random(4, 7), {
                     friction: 0.001, restitution: 0.1, frictionAir: 0.01, render: { fillStyle: '#3498db' }
                 });
             } else if (type === 'wood') {
                 body = Bodies.rectangle(x, y, Common.random(15, 25), Common.random(15, 25), {
-                    density: 0.0005, frictionAir: 0.02, restitution: 0.2, render: { fillStyle: '#8d6e63' }
+                    density: 0.0005, frictionAir: 0.02, render: { fillStyle: '#8d6e63' }
                 });
             } else if (type === 'ball') {
                 body = Bodies.circle(x, y, Common.random(10, 15), {

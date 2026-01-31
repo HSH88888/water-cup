@@ -12,9 +12,6 @@ const Engine = Matter.Engine,
 
 class VirtualCup {
     constructor() {
-        // High Position Iterations for Incompressibility
-        // The higher this value, the stiffer the object interactions (less stack compression).
-        // Standard is 6, we use 50 for water-like rigidness.
         this.engine = Engine.create({
             positionIterations: 50,
             velocityIterations: 20,
@@ -78,7 +75,7 @@ class VirtualCup {
                 height: window.innerHeight,
                 wireframes: false,
                 background: 'transparent',
-                pixelRatio: window.devicePixelRatio // Sharper rendering
+                pixelRatio: window.devicePixelRatio
             }
         });
 
@@ -209,7 +206,11 @@ class VirtualCup {
         }
     }
 
+    // --- Dynamic Item Spawner ---
     addItems(type, count = 20) {
+        // Bomb only spawns 1
+        if (type === 'bomb') count = 1;
+
         const spawnX = window.innerWidth / 2;
         const spawnY = this.cupDimensions.y - this.cupDimensions.height - 50;
         const spread = this.cupDimensions.width / 2;
@@ -220,20 +221,11 @@ class VirtualCup {
             const y = spawnY - Math.random() * 100;
             let body;
 
+            // --- Previous Items ---
             if (type === 'water') {
-                // Incompressible Fluid Settings
-                // Small, heavy, low friction, low bounce, high slop resistance
-                body = Bodies.circle(x, y, 6, { // Slightly larger uniform size
-                    friction: 0.0,
-                    frictionStatic: 0.0,
-                    frictionAir: 0.0, // Low air resistance
-                    restitution: 0.0, // No bounce (inelastic)
-                    density: 1.0, // Heavy (water is heavy!)
-                    slop: 0.0, // No penetration allowed
-                    render: {
-                        fillStyle: '#3498db',
-                        opacity: 0.8
-                    }
+                body = Bodies.circle(x, y, 6, {
+                    friction: 0.0, frictionStatic: 0.0, frictionAir: 0.0, restitution: 0.0, density: 1.0, slop: 0.0,
+                    render: { fillStyle: '#3498db', opacity: 0.8 }
                 });
             } else if (type === 'wood') {
                 body = Bodies.rectangle(x, y, Common.random(15, 25), Common.random(15, 25), {
@@ -252,9 +244,83 @@ class VirtualCup {
                     restitution: 0.5, density: 0.0001, render: { fillStyle: '#fdcb6e' }
                 });
             }
+            // --- New Items ---
+            else if (type === 'stone') {
+                // Heavy, High Friction, Irregular Polygon
+                body = Bodies.polygon(x, y, Math.floor(Math.random() * 3) + 5, Common.random(15, 20), {
+                    density: 0.05, friction: 0.5, restitution: 0.1, render: { fillStyle: '#7f8c8d' }
+                });
+            } else if (type === 'slime') {
+                // Bouncy, sticky
+                body = Bodies.circle(x, y, Common.random(8, 12), {
+                    restitution: 1.2, friction: 0.5, density: 0.002, render: { fillStyle: '#2ecc71', opacity: 0.8 }
+                });
+            } else if (type === 'gold') {
+                // Thin, Flat, Heavy
+                body = Bodies.rectangle(x, y, 20, 5, {
+                    density: 0.1, restitution: 0.0, friction: 0.05, render: { fillStyle: '#f1c40f' }
+                });
+            } else if (type === 'paper') {
+                // Very light, high air friction
+                body = Bodies.rectangle(x, y, 20, 25, {
+                    density: 0.0001, frictionAir: 0.1, restitution: 0.0, render: { fillStyle: '#ecf0f1' }
+                });
+            } else if (type === 'bomb') {
+                // Bomb Logic
+                body = Bodies.circle(x, y, 15, {
+                    density: 0.01, restitution: 0.5,
+                    render: { fillStyle: '#2c3e50', strokeStyle: '#e74C3C', lineWidth: 2 },
+                    label: 'bomb'
+                });
+                this.armBomb(body);
+            }
+
             if (body) newBodies.push(body);
         }
         Composite.add(this.world, newBodies);
+    }
+
+    armBomb(bombBody) {
+        // 3 Second Countdown
+        let ticks = 0;
+        const colorInterval = setInterval(() => {
+            if (!bombBody) { clearInterval(colorInterval); return; }
+
+            // Blink Red
+            bombBody.render.fillStyle = (ticks % 2 === 0) ? '#e74c3c' : '#2c3e50';
+            ticks++;
+
+            if (ticks >= 6) { // 3 seconds (approx 500ms * 6)
+                clearInterval(colorInterval);
+                this.explode(bombBody);
+            }
+        }, 500);
+    }
+
+    explode(bombBody) {
+        // Explosion Force
+        const forceMagnitude = 0.5; // Strong force
+        const allBodies = Composite.allBodies(this.world);
+
+        allBodies.forEach(b => {
+            if (b === bombBody || b.isStatic) return;
+
+            const dx = b.position.x - bombBody.position.x;
+            const dy = b.position.y - bombBody.position.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < 300) { // Blast Radius
+                const force = forceMagnitude * (1 - dist / 300);
+                Body.applyForce(b, b.position, {
+                    x: (dx / dist) * force,
+                    y: (dy / dist) * force
+                });
+            }
+        });
+
+        // Visual Flash? (Optional, maybe particle later)
+        // Remove Bomb
+        Composite.remove(this.world, bombBody);
     }
 }
 

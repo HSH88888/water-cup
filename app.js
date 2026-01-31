@@ -82,12 +82,19 @@ class VirtualCup {
         const width = window.innerWidth;
         const height = window.innerHeight;
 
-        // Create Cup
-        const cupWidth = Math.min(width * 0.5, 300);
-        const cupHeight = 350;
+        // --- Layout Adjustment ---
+        // Toolbar is at bottom approx 150px height (2 rows) + padding.
+        // We need to shift Cup UP.
+
+        const cupWidth = Math.min(width * 0.55, 300); // Slightly wider relative
+        const cupHeight = Math.min(height * 0.4, 350); // Dynamic height (max 40% screen)
         const wallThickness = 10;
+
         const cupX = width / 2;
-        const cupY = height / 2 + 50;
+        // Shift Up: Center - 15% of Height. 
+        // Before was Center + 50px (Too low).
+        // New: Center - 50px? 
+        const cupY = (height / 2) - 50;
 
         this.cupDimensions = { x: cupX, y: cupY, width: cupWidth, height: cupHeight };
 
@@ -100,7 +107,7 @@ class VirtualCup {
             },
             friction: 0.05,
             restitution: 0.2,
-            isStatic: true // Parts are static relative to body
+            isStatic: true
         };
 
         const bottom = Bodies.rectangle(cupX, cupY + cupHeight / 2, cupWidth + wallThickness, wallThickness, partOptions);
@@ -111,7 +118,7 @@ class VirtualCup {
             parts: [bottom, leftWall, rightWall],
             isStatic: true,
             friction: 0.1,
-            label: 'cup' // Tag cup to avoid deleting it
+            label: 'cup'
         });
 
         Composite.add(this.world, this.cup);
@@ -134,18 +141,14 @@ class VirtualCup {
         window.addEventListener('resize', () => {
             this.render.canvas.width = window.innerWidth;
             this.render.canvas.height = window.innerHeight;
+            // Ideally, we should recreate cup on resize, but that resets sim.
+            // Just leaving as is for now.
         });
 
-        // --- Loop Logic (Debug & Cleanup) ---
+        // --- Loop Logic ---
         Events.on(this.runner, 'afterTick', () => {
-            // 1. Cleanup: Remove bodies that fell off screen
             const allBodies = Composite.allBodies(this.world);
-            const removeThreshold = window.innerHeight + 100; // 100px below screen
-
-            // Also check Top/Left/Right bounds if gravity is varied?
-            // Actually, if gravity is UP (phone upscale down), items fly UP.
-            // So we should check all bounds roughly.
-            // Let's use a safe bounding box larger than screen.
+            const removeThreshold = window.innerHeight + 100;
             const boundsPadding = 500;
             const bTop = -boundsPadding;
             const bBottom = window.innerHeight + boundsPadding;
@@ -154,7 +157,6 @@ class VirtualCup {
 
             for (let i = 0; i < allBodies.length; i++) {
                 const body = allBodies[i];
-                // Don't delete static cup parts or constraints
                 if (body.isStatic || body.label === 'cup') continue;
 
                 if (body.position.y > bBottom || body.position.y < bTop ||
@@ -163,14 +165,9 @@ class VirtualCup {
                 }
             }
 
-            // 2. Debug Info
             if (!this.debugInfo) return;
             const fps = this.runner.fps || 60;
-            // Recount after cleanup
             const remainingBodies = Composite.allBodies(this.world).length;
-            // Subtract Cup(1), MouseConstraint is constraint not body? Body.
-            // Actually Composite.allBodies returns bodies. MouseConstraint is a Constraint.
-            // So count is accurate.
             const gx = this.engine.gravity.x.toFixed(2);
             const gy = this.engine.gravity.y.toFixed(2);
             this.debugInfo.innerHTML = `
@@ -185,19 +182,16 @@ class VirtualCup {
         window.addEventListener('devicemotion', (event) => {
             const acc = event.accelerationIncludingGravity;
             if (!acc) return;
-
+            // ... (Same sensor logic) ...
             const rawX = -(acc.x || 0) / 9.8;
             const rawY = (acc.y || 0) / 9.8;
-
             let orientation = 0;
             if (window.screen && window.screen.orientation) {
                 orientation = window.screen.orientation.angle;
             } else if (typeof window.orientation !== 'undefined') {
                 orientation = window.orientation;
             }
-
             const rad = orientation * (Math.PI / 180);
-
             const finalX = rawX * Math.cos(rad) + rawY * Math.sin(rad);
             const finalY = -rawX * Math.sin(rad) + rawY * Math.cos(rad);
 
@@ -205,15 +199,12 @@ class VirtualCup {
             this.engine.gravity.y = finalY;
 
             if (this.cup) {
-                // Ensure cup is static. 
-                // But Body.create isStatic:true handles it physically.
-                // We just reset angle to be safe.
                 Body.setAngle(this.cup, 0);
+                // Keep cup fixed in center
                 Body.setPosition(this.cup, {
-                    x: this.cupDimensions.x,
+                    x: this.cupDimensions.x, // Use stored dimension
                     y: this.cupDimensions.y
                 });
-                // Also reset velocity just in case
                 Body.setVelocity(this.cup, { x: 0, y: 0 });
             }
         });
@@ -280,9 +271,9 @@ class VirtualCup {
 
     addItems(type, count = 20) {
         if (type === 'bomb') count = 1;
-
         const spawnX = window.innerWidth / 2;
-        const spawnY = this.cupDimensions.y - this.cupDimensions.height - 50;
+        // Spawn slightly above cup
+        const spawnY = this.cupDimensions.y - this.cupDimensions.height / 2 - 50;
         const spread = this.cupDimensions.width / 2;
         const newBodies = [];
         const confettiColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#e67e22', '#1abc9c'];

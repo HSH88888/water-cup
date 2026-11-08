@@ -11,18 +11,17 @@ body{margin:0;overflow:hidden;background:#0b1020;font-family:sans-serif}
 </head>
 <body>
 <div id="hud">점수 0 · 스페이스/탭으로 점프</div>
-<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
-<script type="module">
-import * as THREE from 'three';
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
 
 const scene = new THREE.Scene();
-const cam = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 200);
-cam.position.set(0, 13, 9); cam.lookAt(0, 10, 0);
+const cam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 200);
+cam.position.set(0, 15, 12); cam.lookAt(0, 9, 0);
 const ren = new THREE.WebGLRenderer({ antialias: true });
 ren.setSize(innerWidth, innerHeight); ren.setPixelRatio(devicePixelRatio);
 document.body.appendChild(ren.domElement);
-scene.add(new THREE.HemisphereLight(0xbcd, 0x223, 1.2));
-const sun = new THREE.DirectionalLight(0xffffff, 1.5); sun.position.set(5, 15, 8); scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xbbccdd, 0x222233, 0.5));
+const sun = new THREE.DirectionalLight(0xffffff, 0.7); sun.position.set(5, 15, 8); scene.add(sun);
 
 const flat = c => new THREE.MeshStandardMaterial({ color: c, flatShading: true });
 const R = 10;
@@ -56,7 +55,7 @@ for (let i = 0; i < 40; i++) {
 const rocks = [];
 for (let i = 0; i < 8; i++) {
   const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.35), flat(0x555555));
-  r.userData.ang = (i / 8) * Math.PI * 2 + 0.5;
+  r.userData.ang = 0.5 + i * 0.7;
   put(r, r.userData.ang, 0); r.position.y += 0.2; rocks.push(r);
 }
 

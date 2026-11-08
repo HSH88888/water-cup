@@ -6,17 +6,23 @@
 <title>Planet Runner</title>
 <style>
 body{margin:0;overflow:hidden;background:#0b1020;font-family:sans-serif}
+canvas{display:block;touch-action:none}
 #hud{position:fixed;top:12px;left:0;right:0;text-align:center;color:#fff;font-size:20px;pointer-events:none}
 </style>
 </head>
 <body>
-<div id="hud">점수 0 · 스페이스/탭으로 점프</div>
+<div id="hud">탭/스페이스: 점프 · 드래그: 각도 · 휠: 줌</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 
 const scene = new THREE.Scene();
 const cam = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 200);
-cam.position.set(0, 15, 12); cam.lookAt(0, 9, 0);
+let yaw = 0, pitch = 0.45, dist = 12;
+const updateCam = () => {
+  cam.position.set(Math.sin(yaw) * Math.cos(pitch) * dist, 10 + Math.sin(pitch) * dist, Math.cos(yaw) * Math.cos(pitch) * dist);
+  cam.lookAt(0, 10, 0);
+};
+updateCam();
 const ren = new THREE.WebGLRenderer({ antialias: true });
 ren.setSize(innerWidth, innerHeight); ren.setPixelRatio(devicePixelRatio);
 document.body.appendChild(ren.domElement);
@@ -86,7 +92,16 @@ let vy = 0, y = 0, score = 0, t = 0, over = false, speed = 0.5;
 const hud = document.getElementById('hud');
 const jump = () => { if (over) location.reload(); else if (y === 0) vy = 7; };
 addEventListener('keydown', e => e.code === 'Space' && jump());
-addEventListener('pointerdown', jump);
+let drag = null;
+ren.domElement.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, moved: 0 }; });
+addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  drag.moved += Math.abs(dx) + Math.abs(dy); drag.x = e.clientX; drag.y = e.clientY;
+  yaw -= dx * 0.01; pitch = Math.min(1.4, Math.max(-0.2, pitch + dy * 0.01)); updateCam();
+});
+addEventListener('pointerup', () => { if (drag && drag.moved < 8) jump(); drag = null; });
+addEventListener('wheel', e => { dist = Math.min(30, Math.max(5, dist + e.deltaY * 0.01)); updateCam(); });
 addEventListener('resize', () => { cam.aspect = innerWidth / innerHeight; cam.updateProjectionMatrix(); ren.setSize(innerWidth, innerHeight); });
 
 const clock = new THREE.Clock();
